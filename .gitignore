@@ -1,0 +1,29 @@
+# Compiled objects
+*.o
+*.obj
+*.so
+*.dylib
+*.a
+
+# Executables
+*.exe
+*.out
+a.out
+
+# Build directories
+build/
+_build/
+cmake-build-*/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Debug files
+*.dSYM/
+
+# OS
+.DS_Store
+Thumbs.db
