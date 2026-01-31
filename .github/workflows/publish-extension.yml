@@ -120,7 +120,10 @@ jobs:
           fi
 
           echo "Checking version $VERSION on Open VSX Registry..."
-          if npx ovsx get "$EXTENSION_ID" "$VERSION" --json 2>/dev/null | grep -q "\"version\": \"$VERSION\""; then
+          NAMESPACE="${EXTENSION_ID%%.*}"
+          NAME="${EXTENSION_ID#*.}"
+          OVSX_STATUS=$(curl -s -o /dev/null -w "%{http_code}" "https://open-vsx.org/api/${NAMESPACE}/${NAME}/${VERSION}")
+          if [ "$OVSX_STATUS" = "200" ]; then
             OVSX_EXISTS="true"
             echo "::notice::Version $VERSION already exists on Open VSX Registry"
           else
@@ -183,6 +186,15 @@ jobs:
           }
           echo "vsix_name=$VSIX_NAME" >> $GITHUB_OUTPUT
           echo "::notice::Successfully packaged extension"
+
+      - name: Create GitHub release
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: ${{ github.ref_name }}
+          generate_release_notes: true
+          files: ${{ steps.package.outputs.vsix_name }}
 
       - name: Test mode notice
         if: github.event.inputs.dry_run == 'true'
