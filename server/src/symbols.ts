@@ -121,13 +121,76 @@ function extractSymbols(document: TextDocument): DocumentSymbol[] {
   for (let lineNum = 0; lineNum < lines.length; lineNum++) {
     const line = lines[lineNum];
 
-    // Update brace depth
-    for (const char of line) {
-      if (char === '{') braceDepth++;
-      if (char === '}') {
-        braceDepth--;
-        if (braceDepth === 0) {
-          currentContainer = null;
+    // Update brace depth, ignoring braces inside strings and comments
+    let inString = false;
+    let inChar = false;
+    let inLineComment = false;
+    let inBlockComment = false;
+    let escaped = false;
+
+    for (let i = 0; i < line.length; i++) {
+      const char = line[i];
+      const nextChar = i + 1 < line.length ? line[i + 1] : '';
+
+      // Handle escape sequences in strings
+      if (escaped) {
+        escaped = false;
+        continue;
+      }
+
+      if (char === '\\' && (inString || inChar)) {
+        escaped = true;
+        continue;
+      }
+
+      // Check for comment start
+      if (!inString && !inChar && !inLineComment && !inBlockComment) {
+        if (char === '/' && nextChar === '/') {
+          inLineComment = true;
+          i++; // skip next char
+          continue;
+        }
+        if (char === '/' && nextChar === '*') {
+          inBlockComment = true;
+          i++; // skip next char
+          continue;
+        }
+      }
+
+      // Check for block comment end
+      if (inBlockComment && char === '*' && nextChar === '/') {
+        inBlockComment = false;
+        i++; // skip next char
+        continue;
+      }
+
+      // Skip if in any comment
+      if (inLineComment || inBlockComment) {
+        continue;
+      }
+
+      // Handle string delimiters
+      if (char === '"' && !inChar) {
+        inString = !inString;
+        continue;
+      }
+
+      // Handle char delimiters
+      if (char === "'" && !inString) {
+        inChar = !inChar;
+        continue;
+      }
+
+      // Only count braces outside strings and comments
+      if (!inString && !inChar) {
+        if (char === '{') {
+          braceDepth++;
+        }
+        if (char === '}') {
+          braceDepth--;
+          if (braceDepth === 0) {
+            currentContainer = null;
+          }
         }
       }
     }

@@ -17,6 +17,37 @@ import {
 
 let client: LanguageClient;
 
+/**
+ * Validate and sanitize executable path to prevent command injection
+ */
+function isValidExecutablePath(execPath: string): boolean {
+  // Reject paths with shell metacharacters and traversal attempts
+  const dangerousChars = /[;&|`$()<>]/;
+  if (dangerousChars.test(execPath)) {
+    return false;
+  }
+
+  // Reject directory traversal patterns
+  if (execPath.includes('..')) {
+    return false;
+  }
+
+  return true;
+}
+
+/**
+ * Resolve executable path to absolute path if possible
+ */
+function resolveExecutablePath(execPath: string): string {
+  // If already absolute, return as-is
+  if (path.isAbsolute(execPath)) {
+    return execPath;
+  }
+  
+  // Otherwise return the original (will be resolved by shell PATH)
+  return execPath;
+}
+
 export function activate(context: vscode.ExtensionContext) {
   // Path to the server module
   const serverModule = context.asAbsolutePath(
@@ -114,6 +145,17 @@ function registerCommands(context: vscode.ExtensionContext) {
       const config = vscode.workspace.getConfiguration('basilisk');
       const qccPath = config.get<string>('qccPath', 'qcc');
 
+      // Validate qccPath
+      if (!isValidExecutablePath(qccPath)) {
+        vscode.window.showErrorMessage(
+          `Invalid qcc path: "${qccPath}". Path contains shell metacharacters or directory traversal. ` +
+          'Please check your basilisk.qccPath setting.'
+        );
+        return;
+      }
+
+      const resolvedQccPath = resolveExecutablePath(qccPath);
+
       // Get output name
       const filePath = document.fileName;
       const outputName = path.basename(filePath, path.extname(filePath));
@@ -121,7 +163,7 @@ function registerCommands(context: vscode.ExtensionContext) {
       // Build command
       const terminal = vscode.window.createTerminal('Basilisk Compile');
       terminal.show();
-      terminal.sendText(`${qccPath} -Wall -O2 "${filePath}" -o "${outputName}" -lm`);
+      terminal.sendText(`${resolvedQccPath} -Wall -O2 "${filePath}" -o "${outputName}" -lm`);
     })
   );
 
@@ -135,10 +177,26 @@ function registerCommands(context: vscode.ExtensionContext) {
       }
 
       const document = editor.document;
+      if (document.languageId !== 'basilisk' && document.languageId !== 'c') {
+        vscode.window.showErrorMessage('Current file is not a Basilisk C file');
+        return;
+      }
+
       await document.save();
 
       const config = vscode.workspace.getConfiguration('basilisk');
       const qccPath = config.get<string>('qccPath', 'qcc');
+
+      // Validate qccPath
+      if (!isValidExecutablePath(qccPath)) {
+        vscode.window.showErrorMessage(
+          `Invalid qcc path: "${qccPath}". Path contains shell metacharacters or directory traversal. ` +
+          'Please check your basilisk.qccPath setting.'
+        );
+        return;
+      }
+
+      const resolvedQccPath = resolveExecutablePath(qccPath);
 
       const filePath = document.fileName;
       const dirPath = path.dirname(filePath);
@@ -146,7 +204,7 @@ function registerCommands(context: vscode.ExtensionContext) {
 
       const terminal = vscode.window.createTerminal('Basilisk Run');
       terminal.show();
-      terminal.sendText(`cd "${dirPath}" && ${qccPath} -Wall -O2 "${filePath}" -o "${outputName}" -lm && ./${outputName}`);
+      terminal.sendText(`cd "${dirPath}" && ${resolvedQccPath} -Wall -O2 "${filePath}" -o "${outputName}" -lm && ./${outputName}`);
     })
   );
 
@@ -178,10 +236,15 @@ function registerCommands(context: vscode.ExtensionContext) {
 
       let condition = eventCondition;
       if (eventCondition === 'Custom...') {
-        condition = await vscode.window.showInputBox({
+        const customCondition = await vscode.window.showInputBox({
           prompt: 'Event condition',
           placeHolder: 't += 0.1; t <= 10'
-        }) || 'i++';
+        });
+        if (!customCondition) {
+          // User cancelled, don't insert anything
+          return;
+        }
+        condition = customCondition;
       }
 
       const snippet = new vscode.SnippetString(

@@ -328,8 +328,8 @@ function runCommand(
     try {
       process = spawn(command, args, {
         env: options.env,
-        cwd: options.cwd,
-        shell: true
+        cwd: options.cwd
+        // shell: true removed to prevent command injection
       });
     } catch (error) {
       reject(error);
