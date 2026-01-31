@@ -1,6 +1,6 @@
 {
   "name": "@vatsalsy/qcc-lsp",
-  "version": "0.5.3",
+  "version": "0.5.4",
   "description": "CLI wrapper and language server for Basilisk C",
   "license": "MIT",
   "bin": {
