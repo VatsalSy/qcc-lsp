@@ -1,0 +1,214 @@
+{
+  "name": "basilisk-lsp",
+  "displayName": "Basilisk C Language Support",
+  "description": "Language Server Protocol support for Basilisk C (CFD framework)",
+  "version": "0.1.0",
+  "author": "QCC-LSP Contributors",
+  "license": "MIT",
+  "publisher": "basilisk-cfd",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/VatsalSy/qcc-lsp"
+  },
+  "categories": [
+    "Programming Languages",
+    "Linters",
+    "Snippets"
+  ],
+  "keywords": [
+    "basilisk",
+    "cfd",
+    "computational fluid dynamics",
+    "qcc",
+    "c",
+    "lsp"
+  ],
+  "engines": {
+    "vscode": "^1.75.0"
+  },
+  "activationEvents": [
+    "onLanguage:basilisk"
+  ],
+  "main": "./client/out/extension.js",
+  "bin": {
+    "qcc-lsp": "./bin/qcc-lsp"
+  },
+  "contributes": {
+    "languages": [
+      {
+        "id": "basilisk",
+        "aliases": [
+          "Basilisk C",
+          "basilisk"
+        ],
+        "extensions": [
+          ".c",
+          ".h"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "basilisk",
+        "scopeName": "source.basilisk",
+        "path": "./syntaxes/basilisk.tmLanguage.json"
+      }
+    ],
+    "configuration": {
+      "type": "object",
+      "title": "Basilisk C",
+      "properties": {
+        "basilisk.qccPath": {
+          "type": "string",
+          "default": "qcc",
+          "description": "Path to the qcc compiler"
+        },
+        "basilisk.qcc.includePaths": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "description": "Additional include paths for qcc diagnostics (relative paths are resolved from the workspace)"
+        },
+        "basilisk.basiliskPath": {
+          "type": "string",
+          "default": "",
+          "description": "Path to the Basilisk installation directory (BASILISK environment variable)"
+        },
+        "basilisk.enableDiagnostics": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable compilation diagnostics"
+        },
+        "basilisk.diagnosticsOnSave": {
+          "type": "boolean",
+          "default": true,
+          "description": "Run diagnostics on file save"
+        },
+        "basilisk.diagnosticsOnType": {
+          "type": "boolean",
+          "default": false,
+          "description": "Run diagnostics while typing (may be slow)"
+        },
+        "basilisk.maxNumberOfProblems": {
+          "type": "number",
+          "default": 100,
+          "description": "Maximum number of problems reported per file"
+        },
+        "basilisk.clangd.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable clangd fallback when qcc is unavailable"
+        },
+        "basilisk.clangd.mode": {
+          "type": "string",
+          "enum": [
+            "proxy",
+            "augment",
+            "disabled"
+          ],
+          "default": "proxy",
+          "description": "clangd integration mode: proxy (fallback), augment (Basilisk-only features for use alongside external clangd), disabled (no clangd)"
+        },
+        "basilisk.clangd.path": {
+          "type": "string",
+          "default": "clangd",
+          "description": "Path to clangd executable"
+        },
+        "basilisk.clangd.args": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "description": "Additional command-line arguments passed to clangd"
+        },
+        "basilisk.clangd.compileCommandsDir": {
+          "type": "string",
+          "default": "",
+          "description": "Directory containing compile_commands.json (defaults to BASILISK env or inferred qcc root when unset)"
+        },
+        "basilisk.clangd.fallbackFlags": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "description": "Fallback compiler flags for clangd (BASILISK include paths are auto-added when available)"
+        },
+        "basilisk.clangd.diagnosticsMode": {
+          "type": "string",
+          "enum": [
+            "all",
+            "filtered",
+            "none"
+          ],
+          "default": "filtered",
+          "description": "clangd diagnostics mode: all (no filtering), filtered (suppress Basilisk-DSL noise), none (disable clangd diagnostics)"
+        },
+        "basilisk.trace.server": {
+          "type": "string",
+          "enum": [
+            "off",
+            "messages",
+            "verbose"
+          ],
+          "default": "off",
+          "description": "Traces the communication between VS Code and the language server"
+        }
+      }
+    },
+    "commands": [
+      {
+        "command": "basilisk.compile",
+        "title": "Basilisk: Compile Current File"
+      },
+      {
+        "command": "basilisk.compileAndRun",
+        "title": "Basilisk: Compile and Run Current File"
+      },
+      {
+        "command": "basilisk.insertEvent",
+        "title": "Basilisk: Insert Event Block"
+      },
+      {
+        "command": "basilisk.insertForeach",
+        "title": "Basilisk: Insert Foreach Loop"
+      }
+    ],
+    "snippets": [
+      {
+        "language": "basilisk",
+        "path": "./snippets/basilisk.json"
+      }
+    ]
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "npm run compile:server && npm run compile:client",
+    "compile:server": "cd server && npm run compile",
+    "compile:client": "cd client && npm run compile",
+    "watch": "concurrently \"cd server && npm run watch\" \"cd client && npm run watch\"",
+    "lint": "eslint ./client/src ./server/src --ext .ts,.tsx",
+    "postinstall": "cd client && npm install && cd ../server && npm install",
+    "prepublishOnly": "npm run compile",
+    "prepare:npm-package": "node scripts/prepare-npm-package.js",
+    "sync:npm-version": "node scripts/sync-npm-version.js",
+    "test": "npm run test:server && npm run test:client",
+    "test:server": "cd server && npm test",
+    "test:client": "cd client && npm test",
+    "version:patch": "node scripts/bump-version.js patch",
+    "version:minor": "node scripts/bump-version.js minor",
+    "version:major": "node scripts/bump-version.js major"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "@typescript-eslint/eslint-plugin": "^8.54.0",
+    "@typescript-eslint/parser": "^8.54.0",
+    "concurrently": "^8.2.2",
+    "eslint": "^9.39.2",
+    "typescript": "^5.3.2"
+  }
+}

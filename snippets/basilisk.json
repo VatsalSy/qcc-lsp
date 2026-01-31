@@ -1,0 +1,391 @@
+{
+  "Event Block": {
+    "prefix": "event",
+    "body": [
+      "event ${1:name} (${2|i = 0,t = 0,i++,t++,t += 0.1|}) {",
+      "\t$0",
+      "}"
+    ],
+    "description": "Insert a Basilisk event block"
+  },
+  "Event Init": {
+    "prefix": "event_init",
+    "body": [
+      "event init (i = 0) {",
+      "\t$0",
+      "}"
+    ],
+    "description": "Insert initialization event"
+  },
+  "Event Logfile": {
+    "prefix": "event_logfile",
+    "body": [
+      "event logfile (i++) {",
+      "\tfprintf(stderr, \"i = %d, t = %g\\\\n\", i, t);",
+      "\t$0",
+      "}"
+    ],
+    "description": "Insert logging event"
+  },
+  "Event Adapt": {
+    "prefix": "event_adapt",
+    "body": [
+      "event adapt (i++) {",
+      "\tadapt_wavelet({${1:f}}, (double[]){${2:1e-3}}, ${3:maxlevel});",
+      "}"
+    ],
+    "description": "Insert adaptive refinement event"
+  },
+  "Event Movies": {
+    "prefix": "event_movies",
+    "body": [
+      "event movies (t += ${1:0.1}; t <= ${2:10}) {",
+      "\toutput_ppm(${3:f}, fopen(\"${4:field}.ppm\", \"w\"));",
+      "}"
+    ],
+    "description": "Insert output/visualization event"
+  },
+  "Event End": {
+    "prefix": "event_end",
+    "body": [
+      "event end (t = ${1:10}) {",
+      "\t$0",
+      "}"
+    ],
+    "description": "Insert end event"
+  },
+  "Foreach Loop": {
+    "prefix": "foreach",
+    "body": [
+      "foreach() {",
+      "\t$0",
+      "}"
+    ],
+    "description": "Insert foreach loop over all cells"
+  },
+  "Foreach Face": {
+    "prefix": "foreach_face",
+    "body": [
+      "foreach_face(${1|x,y,z|}) {",
+      "\t$0",
+      "}"
+    ],
+    "description": "Insert foreach_face loop"
+  },
+  "Foreach Vertex": {
+    "prefix": "foreach_vertex",
+    "body": [
+      "foreach_vertex() {",
+      "\t$0",
+      "}"
+    ],
+    "description": "Insert foreach_vertex loop"
+  },
+  "Foreach Boundary": {
+    "prefix": "foreach_boundary",
+    "body": [
+      "foreach_boundary(${1|left,right,top,bottom,front,back|}) {",
+      "\t$0",
+      "}"
+    ],
+    "description": "Insert foreach_boundary loop"
+  },
+  "Foreach Dimension": {
+    "prefix": "foreach_dimension",
+    "body": [
+      "foreach_dimension() {",
+      "\t$0",
+      "}"
+    ],
+    "description": "Insert foreach_dimension loop"
+  },
+  "Foreach Level": {
+    "prefix": "foreach_level",
+    "body": [
+      "foreach_level(${1:level}) {",
+      "\t$0",
+      "}"
+    ],
+    "description": "Insert foreach_level loop"
+  },
+  "Foreach Leaf": {
+    "prefix": "foreach_leaf",
+    "body": [
+      "foreach_leaf() {",
+      "\t$0",
+      "}"
+    ],
+    "description": "Insert foreach_leaf loop"
+  },
+  "Foreach Neighbor": {
+    "prefix": "foreach_neighbor",
+    "body": [
+      "foreach_neighbor(${1:1}) {",
+      "\t$0",
+      "}"
+    ],
+    "description": "Insert foreach_neighbor loop"
+  },
+  "Foreach Reduction": {
+    "prefix": "foreach_reduction",
+    "body": [
+      "foreach(reduction(${1|+,*,min,max|}:${2:var})) {",
+      "\t$0",
+      "}"
+    ],
+    "description": "Insert foreach with reduction"
+  },
+  "Scalar Field": {
+    "prefix": "scalar",
+    "body": [
+      "scalar ${1:f}[];"
+    ],
+    "description": "Declare a scalar field"
+  },
+  "Vector Field": {
+    "prefix": "vector",
+    "body": [
+      "vector ${1:u}[];"
+    ],
+    "description": "Declare a vector field"
+  },
+  "Face Vector Field": {
+    "prefix": "face_vector",
+    "body": [
+      "face vector ${1:uf}[];"
+    ],
+    "description": "Declare a face-centered vector field"
+  },
+  "Vertex Scalar Field": {
+    "prefix": "vertex_scalar",
+    "body": [
+      "vertex scalar ${1:psi}[];"
+    ],
+    "description": "Declare a vertex-centered scalar field"
+  },
+  "Tensor Field": {
+    "prefix": "tensor",
+    "body": [
+      "tensor ${1:T}[];"
+    ],
+    "description": "Declare a tensor field"
+  },
+  "Coordinate": {
+    "prefix": "coord",
+    "body": [
+      "coord ${1:pos} = {${2:0}, ${3:0}, ${4:0}};"
+    ],
+    "description": "Declare a coordinate struct"
+  },
+  "Main Function": {
+    "prefix": "main",
+    "body": [
+      "int main() {",
+      "\tinit_grid(${1:64});",
+      "\trun();",
+      "}"
+    ],
+    "description": "Basic Basilisk main function"
+  },
+  "Main MPI": {
+    "prefix": "main_mpi",
+    "body": [
+      "int main(int argc, char *argv[]) {",
+      "\tMPI_Init(&argc, &argv);",
+      "\tinit_grid(${1:64});",
+      "\trun();",
+      "\tMPI_Finalize();",
+      "\treturn 0;",
+      "}"
+    ],
+    "description": "Basilisk main function with MPI"
+  },
+  "Dirichlet BC": {
+    "prefix": "dirichlet",
+    "body": [
+      "${1:f}[${2|left,right,top,bottom,front,back|}] = dirichlet(${3:0});"
+    ],
+    "description": "Set Dirichlet boundary condition"
+  },
+  "Neumann BC": {
+    "prefix": "neumann",
+    "body": [
+      "${1:f}[${2|left,right,top,bottom,front,back|}] = neumann(${3:0});"
+    ],
+    "description": "Set Neumann boundary condition"
+  },
+  "Adapt Wavelet": {
+    "prefix": "adapt_wavelet",
+    "body": [
+      "adapt_wavelet({${1:f}}, (double[]){${2:1e-3}}, ${3:maxlevel});"
+    ],
+    "description": "Adaptive mesh refinement"
+  },
+  "Output PPM": {
+    "prefix": "output_ppm",
+    "body": [
+      "output_ppm(${1:f}, fopen(\"${2:output}.ppm\", \"w\"));"
+    ],
+    "description": "Output field as PPM image"
+  },
+  "Dump": {
+    "prefix": "dump",
+    "body": [
+      "dump(file = \"${1:dump}\");"
+    ],
+    "description": "Save simulation state"
+  },
+  "Restore": {
+    "prefix": "restore",
+    "body": [
+      "if (!restore(file = \"${1:dump}\")) {",
+      "\t// Initialize from scratch",
+      "\t$0",
+      "}"
+    ],
+    "description": "Restore simulation state"
+  },
+  "Include Run": {
+    "prefix": "include_run",
+    "body": [
+      "#include \"run.h\""
+    ],
+    "description": "Include run.h header"
+  },
+  "Include Navier-Stokes": {
+    "prefix": "include_ns",
+    "body": [
+      "#include \"navier-stokes/centered.h\""
+    ],
+    "description": "Include Navier-Stokes centered scheme"
+  },
+  "Include Two-Phase": {
+    "prefix": "include_twophase",
+    "body": [
+      "#include \"two-phase.h\""
+    ],
+    "description": "Include two-phase flow"
+  },
+  "Include VOF": {
+    "prefix": "include_vof",
+    "body": [
+      "#include \"vof.h\""
+    ],
+    "description": "Include VOF method"
+  },
+  "Include Tension": {
+    "prefix": "include_tension",
+    "body": [
+      "#include \"tension.h\""
+    ],
+    "description": "Include surface tension"
+  },
+  "Include View": {
+    "prefix": "include_view",
+    "body": [
+      "#include \"view.h\""
+    ],
+    "description": "Include visualization"
+  },
+  "Include Poisson": {
+    "prefix": "include_poisson",
+    "body": [
+      "#include \"poisson.h\""
+    ],
+    "description": "Include Poisson solver"
+  },
+  "Include Diffusion": {
+    "prefix": "include_diffusion",
+    "body": [
+      "#include \"diffusion.h\""
+    ],
+    "description": "Include diffusion solver"
+  },
+  "Basilisk Header": {
+    "prefix": "basilisk_header",
+    "body": [
+      "/**",
+      "# ${1:Title}",
+      "",
+      "${2:Description}",
+      "",
+      "*/",
+      "",
+      "#include \"run.h\"",
+      "",
+      "$0"
+    ],
+    "description": "Insert Basilisk file header with documentation"
+  },
+  "Basilisk Full Template": {
+    "prefix": "basilisk_template",
+    "body": [
+      "/**",
+      "# ${1:Title}",
+      "",
+      "${2:Description}",
+      "",
+      "*/",
+      "",
+      "#include \"run.h\"",
+      "",
+      "scalar f[];",
+      "",
+      "int main() {",
+      "\tinit_grid(${3:64});",
+      "\trun();",
+      "}",
+      "",
+      "event init (i = 0) {",
+      "\tforeach()",
+      "\t\tf[] = ${4:0};",
+      "}",
+      "",
+      "event logfile (i++) {",
+      "\tfprintf(stderr, \"i = %d, t = %g\\\\n\", i, t);",
+      "}",
+      "",
+      "event end (t = ${5:10}) {",
+      "\t$0",
+      "}"
+    ],
+    "description": "Complete Basilisk simulation template"
+  },
+  "Stats": {
+    "prefix": "statsf",
+    "body": [
+      "stats s = statsf(${1:f});",
+      "fprintf(stderr, \"min = %g, max = %g\\\\n\", s.min, s.max);"
+    ],
+    "description": "Get field statistics"
+  },
+  "Norm": {
+    "prefix": "normf",
+    "body": [
+      "norm n = normf(${1:f});",
+      "fprintf(stderr, \"L2 norm = %g\\\\n\", n.rms);"
+    ],
+    "description": "Get field norms"
+  },
+  "Fraction Circle": {
+    "prefix": "fraction_circle",
+    "body": [
+      "fraction(${1:f}, sq(x - ${2:0.5}) + sq(y - ${3:0.5}) - sq(${4:0.1}));"
+    ],
+    "description": "Initialize circular VOF fraction"
+  },
+  "Fraction Sphere": {
+    "prefix": "fraction_sphere",
+    "body": [
+      "fraction(${1:f}, sq(x - ${2:0.5}) + sq(y - ${3:0.5}) + sq(z - ${4:0.5}) - sq(${5:0.1}));"
+    ],
+    "description": "Initialize spherical VOF fraction"
+  },
+  "Interpolate": {
+    "prefix": "interpolate",
+    "body": [
+      "double val = interpolate(${1:f}, ${2:x}, ${3:y});"
+    ],
+    "description": "Interpolate field value at point"
+  }
+}

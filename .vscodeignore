@@ -1,0 +1,14 @@
+basilisk/**
+packages/**
+**/node_modules/**
+.git/**
+.vscode/**
+dist/**
+out/**
+*.log
+.env
+*.tgz
+.DS_Store
+*.vsix
+!client/out/**
+!server/out/**

@@ -1,0 +1,255 @@
+name: Publish Extension
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Test run without publishing'
+        type: boolean
+        default: false
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  check-version:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.meta.outputs.version }}
+      extension_id: ${{ steps.meta.outputs.extension_id }}
+      namespace: ${{ steps.meta.outputs.namespace }}
+      npm_package_name: ${{ steps.meta.outputs.npm_package_name }}
+      npm_package_version: ${{ steps.meta.outputs.npm_package_version }}
+      should_publish: ${{ steps.check_versions.outputs.should_publish }}
+      vs_exists: ${{ steps.check_versions.outputs.vs_exists }}
+      ovsx_exists: ${{ steps.check_versions.outputs.ovsx_exists }}
+      gh_pkg_exists: ${{ steps.check_versions.outputs.gh_pkg_exists }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install vsce and ovsx
+        run: npm install -g @vscode/vsce ovsx
+
+      - name: Get extension metadata
+        id: meta
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          EXTENSION_ID=$(node -p "const p=require('./package.json'); p.publisher + '.' + p.name")
+          NAMESPACE=$(node -p "require('./package.json').publisher")
+          NPM_PACKAGE_NAME=$(node -p "require('./packages/npm/package.json').name")
+          NPM_PACKAGE_VERSION=$(node -p "require('./packages/npm/package.json').version")
+          echo "VERSION=$VERSION"
+          echo "EXTENSION_ID=$EXTENSION_ID"
+          echo "NAMESPACE=$NAMESPACE"
+          echo "NPM_PACKAGE_NAME=$NPM_PACKAGE_NAME"
+          echo "NPM_PACKAGE_VERSION=$NPM_PACKAGE_VERSION"
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "extension_id=$EXTENSION_ID" >> $GITHUB_OUTPUT
+          echo "namespace=$NAMESPACE" >> $GITHUB_OUTPUT
+          echo "npm_package_name=$NPM_PACKAGE_NAME" >> $GITHUB_OUTPUT
+          echo "npm_package_version=$NPM_PACKAGE_VERSION" >> $GITHUB_OUTPUT
+
+      - name: Validate tag matches package.json
+        if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'release'
+        env:
+          VERSION: ${{ steps.meta.outputs.version }}
+        run: |
+          if [ "${{ github.event_name }}" = "release" ]; then
+            TAG="${{ github.event.release.tag_name }}"
+          else
+            TAG="${GITHUB_REF_NAME}"
+          fi
+          EXPECTED="v$VERSION"
+          if [ "$TAG" != "$EXPECTED" ]; then
+            echo "::error::Tag $TAG does not match package.json version $EXPECTED"
+            exit 1
+          fi
+
+      - name: Validate npm package version matches
+        env:
+          VERSION: ${{ steps.meta.outputs.version }}
+          NPM_PACKAGE_VERSION: ${{ steps.meta.outputs.npm_package_version }}
+        run: |
+          if [ "$NPM_PACKAGE_VERSION" != "$VERSION" ]; then
+            echo "::error::packages/npm/package.json version $NPM_PACKAGE_VERSION does not match root $VERSION"
+            exit 1
+          fi
+
+      - name: Check existing versions
+        id: check_versions
+        env:
+          VERSION: ${{ steps.meta.outputs.version }}
+          EXTENSION_ID: ${{ steps.meta.outputs.extension_id }}
+          NPM_PACKAGE_NAME: ${{ steps.meta.outputs.npm_package_name }}
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DRY_RUN: ${{ github.event.inputs.dry_run == 'true' }}
+        run: |
+          VS_EXISTS="false"
+          OVSX_EXISTS="false"
+          GH_PKG_EXISTS="false"
+
+          if [ "$DRY_RUN" = "true" ]; then
+            echo "::notice::Running in test mode - skipping version checks"
+            echo "vs_exists=false" >> $GITHUB_OUTPUT
+            echo "ovsx_exists=false" >> $GITHUB_OUTPUT
+            echo "gh_pkg_exists=false" >> $GITHUB_OUTPUT
+            echo "should_publish=true" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          echo "Checking version $VERSION on VS Marketplace..."
+          if npx @vscode/vsce show "$EXTENSION_ID" "$VERSION" --json 2>/dev/null | grep -q "\"version\": \"$VERSION\""; then
+            VS_EXISTS="true"
+            echo "::notice::Version $VERSION already exists on VS Marketplace"
+          else
+            echo "Version $VERSION does not exist on VS Marketplace"
+          fi
+
+          echo "Checking version $VERSION on Open VSX Registry..."
+          if npx ovsx get "$EXTENSION_ID" "$VERSION" --json 2>/dev/null | grep -q "\"version\": \"$VERSION\""; then
+            OVSX_EXISTS="true"
+            echo "::notice::Version $VERSION already exists on Open VSX Registry"
+          else
+            echo "Version $VERSION does not exist on Open VSX Registry"
+          fi
+
+          echo "Checking version $VERSION on GitHub Packages..."
+          SCOPE="${NPM_PACKAGE_NAME%%/*}"
+          echo "${SCOPE}:registry=https://npm.pkg.github.com" >> ~/.npmrc
+          echo "//npm.pkg.github.com/:_authToken=${NODE_AUTH_TOKEN}" >> ~/.npmrc
+          if npm view "$NPM_PACKAGE_NAME@$VERSION" version --registry https://npm.pkg.github.com >/dev/null 2>&1; then
+            GH_PKG_EXISTS="true"
+            echo "::notice::Version $VERSION already exists on GitHub Packages"
+          else
+            echo "Version $VERSION does not exist on GitHub Packages"
+          fi
+
+          echo "vs_exists=$VS_EXISTS" >> $GITHUB_OUTPUT
+          echo "ovsx_exists=$OVSX_EXISTS" >> $GITHUB_OUTPUT
+          echo "gh_pkg_exists=$GH_PKG_EXISTS" >> $GITHUB_OUTPUT
+
+          if [ "$VS_EXISTS" = "true" ] && [ "$OVSX_EXISTS" = "true" ] && [ "$GH_PKG_EXISTS" = "true" ]; then
+            echo "should_publish=false" >> $GITHUB_OUTPUT
+            echo "::notice::Version $VERSION exists in all registries, skipping publish"
+          else
+            echo "should_publish=true" >> $GITHUB_OUTPUT
+            echo "Publishing needed for at least one registry"
+          fi
+
+  publish:
+    needs: check-version
+    if: needs.check-version.outputs.should_publish == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install vsce and ovsx
+        run: npm install -g @vscode/vsce ovsx
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Package extension
+        id: package
+        env:
+          VERSION: ${{ needs.check-version.outputs.version }}
+        run: |
+          NAME=$(node -p "require('./package.json').name")
+          VSIX_NAME="${NAME}-${VERSION}.vsix"
+          echo "Packaging extension..."
+          npx @vscode/vsce package -o "$VSIX_NAME" || {
+            echo "::error::Failed to package extension"
+            exit 1
+          }
+          echo "vsix_name=$VSIX_NAME" >> $GITHUB_OUTPUT
+          echo "::notice::Successfully packaged extension"
+
+      - name: Test mode notice
+        if: github.event.inputs.dry_run == 'true'
+        run: |
+          echo "::notice::Running in test mode - skipping actual publishing"
+          echo "### Test Mode Results" >> $GITHUB_STEP_SUMMARY
+          echo "✅ Extension packaging successful" >> $GITHUB_STEP_SUMMARY
+          echo "✅ Version format valid" >> $GITHUB_STEP_SUMMARY
+          echo "✅ Would publish to VS Marketplace" >> $GITHUB_STEP_SUMMARY
+          echo "✅ Would publish to Open VSX Registry" >> $GITHUB_STEP_SUMMARY
+          echo "✅ Would publish to GitHub Packages" >> $GITHUB_STEP_SUMMARY
+
+      - name: Publish to VS Marketplace
+        if: needs.check-version.outputs.vs_exists != 'true' && github.event.inputs.dry_run != 'true'
+        env:
+          VSCE_TOKEN: ${{ secrets.VS_MARKETPLACE_TOKEN }}
+          VSIX_NAME: ${{ steps.package.outputs.vsix_name }}
+        run: |
+          echo "Publishing $VSIX_NAME to VS Marketplace..."
+          npx @vscode/vsce publish --packagePath "$VSIX_NAME" -p "$VSCE_TOKEN" || {
+            echo "::error::Failed to publish to VS Marketplace"
+            exit 1
+          }
+          echo "::notice::Successfully published to VS Marketplace"
+
+      - name: Publish to Open VSX Registry
+        if: needs.check-version.outputs.ovsx_exists != 'true' && github.event.inputs.dry_run != 'true'
+        env:
+          OVSX_TOKEN: ${{ secrets.OPEN_VSX_TOKEN }}
+          NAMESPACE: ${{ needs.check-version.outputs.namespace }}
+          VSIX_NAME: ${{ steps.package.outputs.vsix_name }}
+        run: |
+          echo "Creating namespace on Open VSX (if needed)..."
+          npx ovsx create-namespace "$NAMESPACE" -p "$OVSX_TOKEN" || true
+
+          echo "Publishing $VSIX_NAME to Open VSX Registry..."
+          npx ovsx publish "$VSIX_NAME" -p "$OVSX_TOKEN" || {
+            echo "::error::Failed to publish to Open VSX Registry"
+            exit 1
+          }
+          echo "::notice::Successfully published to Open VSX Registry"
+
+      - name: Prepare npm package
+        run: node scripts/prepare-npm-package.js
+
+      - name: Publish to GitHub Packages
+        if: needs.check-version.outputs.gh_pkg_exists != 'true' && github.event.inputs.dry_run != 'true'
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NPM_PACKAGE_NAME: ${{ needs.check-version.outputs.npm_package_name }}
+        working-directory: packages/npm
+        run: |
+          SCOPE="${NPM_PACKAGE_NAME%%/*}"
+          echo "${SCOPE}:registry=https://npm.pkg.github.com" >> ~/.npmrc
+          echo "//npm.pkg.github.com/:_authToken=${NODE_AUTH_TOKEN}" >> ~/.npmrc
+          echo "Publishing package to GitHub Packages..."
+          npm publish --registry https://npm.pkg.github.com --access public || {
+            echo "::error::Failed to publish to GitHub Packages"
+            exit 1
+          }
+          echo "::notice::Successfully published to GitHub Packages"
+
+      - name: Publish Summary
+        if: github.event.inputs.dry_run != 'true'
+        run: |
+          echo "### Publishing Summary" >> $GITHUB_STEP_SUMMARY
+          echo "Version: ${{ needs.check-version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+          echo "- VS Marketplace: ${{ needs.check-version.outputs.vs_exists == 'true' && 'Already exists' || 'Published' }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Open VSX Registry: ${{ needs.check-version.outputs.ovsx_exists == 'true' && 'Already exists' || 'Published' }}" >> $GITHUB_STEP_SUMMARY
+          echo "- GitHub Packages: ${{ needs.check-version.outputs.gh_pkg_exists == 'true' && 'Already exists' || 'Published' }}" >> $GITHUB_STEP_SUMMARY

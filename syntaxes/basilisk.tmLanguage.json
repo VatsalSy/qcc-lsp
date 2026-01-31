@@ -1,0 +1,406 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "Basilisk C",
+  "scopeName": "source.basilisk",
+  "patterns": [
+    { "include": "#comments" },
+    { "include": "#preprocessor" },
+    { "include": "#strings" },
+    { "include": "#numbers" },
+    { "include": "#events" },
+    { "include": "#foreach-loops" },
+    { "include": "#field-declarations" },
+    { "include": "#basilisk-keywords" },
+    { "include": "#basilisk-types" },
+    { "include": "#basilisk-functions" },
+    { "include": "#basilisk-constants" },
+    { "include": "#basilisk-variables" },
+    { "include": "#mpi-keywords" },
+    { "include": "#c-keywords" },
+    { "include": "#c-types" },
+    { "include": "#operators" },
+    { "include": "#brackets" },
+    { "include": "#function-calls" },
+    { "include": "#identifiers" }
+  ],
+  "repository": {
+    "comments": {
+      "patterns": [
+        {
+          "name": "comment.block.basilisk",
+          "begin": "/\\*\\*",
+          "end": "\\*/",
+          "beginCaptures": {
+            "0": { "name": "punctuation.definition.comment.begin.basilisk" }
+          },
+          "endCaptures": {
+            "0": { "name": "punctuation.definition.comment.end.basilisk" }
+          },
+          "patterns": [
+            {
+              "name": "markup.heading.markdown",
+              "match": "^\\s*\\*\\s*(#+.*)$"
+            },
+            {
+              "name": "markup.bold.markdown",
+              "match": "\\*\\*[^*]+\\*\\*"
+            },
+            {
+              "name": "markup.italic.markdown",
+              "match": "\\*[^*]+\\*"
+            }
+          ]
+        },
+        {
+          "name": "comment.block.c",
+          "begin": "/\\*",
+          "end": "\\*/",
+          "beginCaptures": {
+            "0": { "name": "punctuation.definition.comment.begin.basilisk" }
+          },
+          "endCaptures": {
+            "0": { "name": "punctuation.definition.comment.end.basilisk" }
+          }
+        },
+        {
+          "name": "comment.line.double-slash.basilisk",
+          "match": "//.*$"
+        }
+      ]
+    },
+    "preprocessor": {
+      "patterns": [
+        {
+          "name": "meta.preprocessor.include.basilisk",
+          "begin": "^\\s*(#include)\\s*",
+          "end": "$",
+          "beginCaptures": {
+            "1": { "name": "keyword.control.directive.include.basilisk" }
+          },
+          "patterns": [
+            {
+              "name": "string.quoted.other.lt-gt.include.basilisk",
+              "begin": "<",
+              "end": ">",
+              "beginCaptures": { "0": { "name": "punctuation.definition.string.begin.basilisk" } },
+              "endCaptures": { "0": { "name": "punctuation.definition.string.end.basilisk" } }
+            },
+            {
+              "name": "string.quoted.double.include.basilisk",
+              "begin": "\"",
+              "end": "\"",
+              "beginCaptures": { "0": { "name": "punctuation.definition.string.begin.basilisk" } },
+              "endCaptures": { "0": { "name": "punctuation.definition.string.end.basilisk" } }
+            }
+          ]
+        },
+        {
+          "name": "meta.preprocessor.define.basilisk",
+          "begin": "^\\s*(#define)\\s+(\\w+)",
+          "end": "(?<!\\\\)$",
+          "beginCaptures": {
+            "1": { "name": "keyword.control.directive.define.basilisk" },
+            "2": { "name": "entity.name.function.preprocessor.basilisk" }
+          },
+          "patterns": [
+            { "include": "#comments" },
+            { "include": "#strings" },
+            { "include": "#numbers" }
+          ]
+        },
+        {
+          "name": "meta.preprocessor.conditional.basilisk",
+          "match": "^\\s*(#(?:if|ifdef|ifndef|else|elif|endif|undef|pragma|error|warning))\\b(.*)$",
+          "captures": {
+            "1": { "name": "keyword.control.directive.conditional.basilisk" },
+            "2": { "name": "string.unquoted.preprocessor.basilisk" }
+          }
+        }
+      ]
+    },
+    "strings": {
+      "patterns": [
+        {
+          "name": "string.quoted.double.basilisk",
+          "begin": "\"",
+          "end": "\"",
+          "beginCaptures": { "0": { "name": "punctuation.definition.string.begin.basilisk" } },
+          "endCaptures": { "0": { "name": "punctuation.definition.string.end.basilisk" } },
+          "patterns": [
+            {
+              "name": "constant.character.escape.basilisk",
+              "match": "\\\\(?:[abfnrtv\\\\'\"]|x[0-9a-fA-F]{2}|[0-7]{1,3})"
+            }
+          ]
+        },
+        {
+          "name": "string.quoted.single.basilisk",
+          "begin": "'",
+          "end": "'",
+          "beginCaptures": { "0": { "name": "punctuation.definition.string.begin.basilisk" } },
+          "endCaptures": { "0": { "name": "punctuation.definition.string.end.basilisk" } },
+          "patterns": [
+            {
+              "name": "constant.character.escape.basilisk",
+              "match": "\\\\(?:[abfnrtv\\\\'\"]|x[0-9a-fA-F]{2}|[0-7]{1,3})"
+            }
+          ]
+        }
+      ]
+    },
+    "numbers": {
+      "patterns": [
+        {
+          "name": "constant.numeric.float.basilisk",
+          "match": "\\b[0-9]+\\.[0-9]*(?:[eE][+-]?[0-9]+)?[fFlL]?\\b"
+        },
+        {
+          "name": "constant.numeric.float.basilisk",
+          "match": "\\b\\.[0-9]+(?:[eE][+-]?[0-9]+)?[fFlL]?\\b"
+        },
+        {
+          "name": "constant.numeric.float.basilisk",
+          "match": "\\b[0-9]+[eE][+-]?[0-9]+[fFlL]?\\b"
+        },
+        {
+          "name": "constant.numeric.hex.basilisk",
+          "match": "\\b0[xX][0-9a-fA-F]+[uUlL]*\\b"
+        },
+        {
+          "name": "constant.numeric.octal.basilisk",
+          "match": "\\b0[0-7]+[uUlL]*\\b"
+        },
+        {
+          "name": "constant.numeric.decimal.basilisk",
+          "match": "\\b[0-9]+[uUlL]*\\b"
+        }
+      ]
+    },
+    "events": {
+      "patterns": [
+        {
+          "name": "meta.event.basilisk",
+          "begin": "\\b(event)\\s+(\\w+)\\s*\\(",
+          "end": "\\)",
+          "beginCaptures": {
+            "1": { "name": "keyword.control.event.basilisk" },
+            "2": { "name": "entity.name.function.event.basilisk" }
+          },
+          "patterns": [
+            {
+              "name": "variable.parameter.event.basilisk",
+              "match": "\\b(i|t)\\b"
+            },
+            {
+              "name": "keyword.operator.assignment.basilisk",
+              "match": "\\+=|\\+\\+|="
+            },
+            { "include": "#numbers" }
+          ]
+        }
+      ]
+    },
+    "foreach-loops": {
+      "patterns": [
+        {
+          "name": "meta.foreach.basilisk",
+          "begin": "\\b(foreach(?:_face|_vertex|_boundary|_dimension|_level|_leaf|_neighbor|_cell|_child|_block|_blockf|_block_inner|_point|_cache|_cache_level|_stencil)?)\\s*\\(",
+          "end": "\\)",
+          "beginCaptures": {
+            "1": { "name": "keyword.control.foreach.basilisk" }
+          },
+          "patterns": [
+            {
+              "name": "keyword.other.reduction.basilisk",
+              "match": "\\breduction\\b"
+            },
+            {
+              "name": "variable.parameter.direction.basilisk",
+              "match": "\\b(x|y|z|left|right|top|bottom|front|back)\\b"
+            },
+            {
+              "name": "keyword.operator.reduction.basilisk",
+              "match": "\\+|\\*|min|max"
+            },
+            { "include": "#numbers" },
+            { "include": "#identifiers" }
+          ]
+        }
+      ]
+    },
+    "field-declarations": {
+      "patterns": [
+        {
+          "name": "meta.field.declaration.basilisk",
+          "match": "\\b(face\\s+vector|vertex\\s+scalar|vertex\\s+vector|symmetric\\s+tensor|scalar|vector|tensor)\\s+(\\w+)\\s*\\[",
+          "captures": {
+            "1": { "name": "storage.type.field.basilisk" },
+            "2": { "name": "variable.other.field.basilisk" }
+          }
+        },
+        {
+          "name": "meta.new-field.basilisk",
+          "match": "\\b(new)\\s+(face\\s+vector|vertex\\s+scalar|scalar|vector|tensor)\\s+(\\w+)\\s*\\[",
+          "captures": {
+            "1": { "name": "keyword.operator.new.basilisk" },
+            "2": { "name": "storage.type.field.basilisk" },
+            "3": { "name": "variable.other.field.basilisk" }
+          }
+        }
+      ]
+    },
+    "basilisk-keywords": {
+      "patterns": [
+        {
+          "name": "keyword.control.basilisk",
+          "match": "\\b(event|foreach|foreach_face|foreach_vertex|foreach_boundary|foreach_dimension|foreach_level|foreach_leaf|foreach_neighbor|foreach_cell|foreach_child|foreach_block|foreach_blockf|foreach_block_inner|foreach_point|foreach_cache|foreach_stencil|reduction)\\b"
+        },
+        {
+          "name": "keyword.other.boundary.basilisk",
+          "match": "\\b(dirichlet|neumann|periodic|symmetry)\\b"
+        }
+      ]
+    },
+    "basilisk-types": {
+      "patterns": [
+        {
+          "name": "storage.type.basilisk",
+          "match": "\\b(scalar|vector|tensor|face|vertex|symmetric|coord|point|Grid|Boundary|Tree|Quadtree|Octree|Point|Cell)\\b"
+        }
+      ]
+    },
+    "basilisk-functions": {
+      "patterns": [
+        {
+          "name": "support.function.basilisk",
+          "match": "\\b(run|init_grid|free_grid|cartesian|quadtree|octree|multigrid|adapt_wavelet|refine|unrefine|coarsen|diffusion|poisson|project|advection|viscosity|mg_solve|output_ppm|output_gfs|output_vtu|output_field|output_facets|dump|restore|noise|interpolate|statsf|normf|change|fraction|curvature|height|facet_normal|embed_gradient|normalize|sq|cube|sign|clamp|fabs|pid|npe|mpi_all_reduce|mpi_boundary_update)\\b"
+        }
+      ]
+    },
+    "basilisk-constants": {
+      "patterns": [
+        {
+          "name": "constant.language.basilisk",
+          "match": "\\b(PI|M_PI|HUGE|nodata|true|false|NULL|N|L0|X0|Y0|Z0|DT|TOLERANCE|NITERMAX|NITERMIN|BGHOSTS|GHOSTS|TRASH)\\b"
+        }
+      ]
+    },
+    "basilisk-variables": {
+      "patterns": [
+        {
+          "name": "variable.language.basilisk",
+          "match": "\\b(Delta|level|depth|point|child|neighbor|fm|cm|cs)\\b"
+        },
+        {
+          "name": "variable.language.coordinate.basilisk",
+          "match": "(?<=\\[)\\s*(x|y|z)\\s*(?=[,\\]])"
+        }
+      ]
+    },
+    "mpi-keywords": {
+      "patterns": [
+        {
+          "name": "support.function.mpi.basilisk",
+          "match": "\\b(MPI_\\w+|mpi_\\w+)\\b"
+        }
+      ]
+    },
+    "c-keywords": {
+      "patterns": [
+        {
+          "name": "keyword.control.c",
+          "match": "\\b(if|else|for|while|do|switch|case|default|break|continue|return|goto)\\b"
+        },
+        {
+          "name": "storage.modifier.c",
+          "match": "\\b(static|const|volatile|extern|register|inline|restrict|auto|signed|unsigned)\\b"
+        },
+        {
+          "name": "keyword.other.c",
+          "match": "\\b(sizeof|typeof|typedef|struct|union|enum)\\b"
+        }
+      ]
+    },
+    "c-types": {
+      "patterns": [
+        {
+          "name": "storage.type.c",
+          "match": "\\b(void|char|short|int|long|float|double|size_t|ssize_t|FILE|bool)\\b"
+        }
+      ]
+    },
+    "operators": {
+      "patterns": [
+        {
+          "name": "keyword.operator.comparison.basilisk",
+          "match": "==|!=|<=|>=|<|>"
+        },
+        {
+          "name": "keyword.operator.assignment.basilisk",
+          "match": "\\+=|-=|\\*=|/=|%=|&=|\\|=|\\^=|<<=|>>=|="
+        },
+        {
+          "name": "keyword.operator.arithmetic.basilisk",
+          "match": "\\+|-|\\*|/|%"
+        },
+        {
+          "name": "keyword.operator.logical.basilisk",
+          "match": "&&|\\|\\||!"
+        },
+        {
+          "name": "keyword.operator.bitwise.basilisk",
+          "match": "&|\\||\\^|~|<<|>>"
+        },
+        {
+          "name": "keyword.operator.increment.basilisk",
+          "match": "\\+\\+|--"
+        },
+        {
+          "name": "keyword.operator.ternary.basilisk",
+          "match": "\\?|:"
+        },
+        {
+          "name": "keyword.operator.member.basilisk",
+          "match": "\\.|->|::"
+        }
+      ]
+    },
+    "brackets": {
+      "patterns": [
+        {
+          "name": "meta.bracket.square.basilisk",
+          "begin": "\\[",
+          "end": "\\]",
+          "patterns": [
+            {
+              "name": "variable.language.index.basilisk",
+              "match": "\\b(x|y|z)\\b"
+            },
+            { "include": "#numbers" },
+            { "include": "#identifiers" },
+            { "include": "#operators" }
+          ]
+        }
+      ]
+    },
+    "function-calls": {
+      "patterns": [
+        {
+          "name": "meta.function-call.basilisk",
+          "match": "\\b([a-zA-Z_][a-zA-Z0-9_]*)\\s*(?=\\()",
+          "captures": {
+            "1": { "name": "entity.name.function.basilisk" }
+          }
+        }
+      ]
+    },
+    "identifiers": {
+      "patterns": [
+        {
+          "name": "variable.other.basilisk",
+          "match": "\\b[a-zA-Z_][a-zA-Z0-9_]*\\b"
+        }
+      ]
+    }
+  }
+}

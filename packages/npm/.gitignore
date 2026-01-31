@@ -1,0 +1,7 @@
+client/out/
+server/out/
+snippets/
+syntaxes/
+language-configuration.json
+README.md
+LICENSE
