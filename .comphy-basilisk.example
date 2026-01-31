@@ -1,0 +1,20 @@
+{
+  "basiliskPath": "/Users/you/basilisk/src",
+  "qccPath": "qcc",
+  "qcc": {
+    "includePaths": [
+      "src-local",
+      "include",
+      "/absolute/path/to/other/headers"
+    ]
+  },
+  "clangd": {
+    "enabled": true,
+    "mode": "proxy",
+    "path": "clangd",
+    "args": [],
+    "compileCommandsDir": "",
+    "fallbackFlags": [],
+    "diagnosticsMode": "filtered"
+  }
+}

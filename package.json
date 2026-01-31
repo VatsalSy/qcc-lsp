@@ -30,6 +30,9 @@
     "onLanguage:basilisk"
   ],
   "main": "./client/out/extension.js",
+  "bin": {
+    "qcc-lsp": "./bin/qcc-lsp"
+  },
   "contributes": {
     "languages": [
       {
@@ -61,6 +64,14 @@
           "default": "qcc",
           "description": "Path to the qcc compiler"
         },
+        "basilisk.qcc.includePaths": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "description": "Additional include paths for qcc diagnostics (relative paths are resolved from the workspace)"
+        },
         "basilisk.basiliskPath": {
           "type": "string",
           "default": "",
@@ -85,6 +96,57 @@
           "type": "number",
           "default": 100,
           "description": "Maximum number of problems reported per file"
+        },
+        "basilisk.clangd.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable clangd fallback when qcc is unavailable"
+        },
+        "basilisk.clangd.mode": {
+          "type": "string",
+          "enum": [
+            "proxy",
+            "augment",
+            "disabled"
+          ],
+          "default": "proxy",
+          "description": "clangd integration mode: proxy (fallback), augment (Basilisk-only features for use alongside external clangd), disabled (no clangd)"
+        },
+        "basilisk.clangd.path": {
+          "type": "string",
+          "default": "clangd",
+          "description": "Path to clangd executable"
+        },
+        "basilisk.clangd.args": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "description": "Additional command-line arguments passed to clangd"
+        },
+        "basilisk.clangd.compileCommandsDir": {
+          "type": "string",
+          "default": "",
+          "description": "Directory containing compile_commands.json (defaults to BASILISK env or inferred qcc root when unset)"
+        },
+        "basilisk.clangd.fallbackFlags": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "description": "Fallback compiler flags for clangd (BASILISK include paths are auto-added when available)"
+        },
+        "basilisk.clangd.diagnosticsMode": {
+          "type": "string",
+          "enum": [
+            "all",
+            "filtered",
+            "none"
+          ],
+          "default": "filtered",
+          "description": "clangd diagnostics mode: all (no filtering), filtered (suppress Basilisk-DSL noise), none (disable clangd diagnostics)"
         },
         "basilisk.trace.server": {
           "type": "string",
