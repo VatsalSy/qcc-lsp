@@ -16,19 +16,66 @@ import {
   Range,
   Position
 } from 'vscode-languageserver';
+import { findSrcLocalDir } from './projectConfig';
+
+export interface QccSettings {
+  includePaths: string[];
+}
 
 export interface DiagnosticsSettings {
   qccPath: string;
   basiliskPath: string;
   enableDiagnostics: boolean;
   maxNumberOfProblems: number;
+  qcc: QccSettings;
 }
 
-export const defaultSettings: DiagnosticsSettings = {
+export interface DiagnosticsLogger {
+  warn: (message: string) => void;
+}
+
+export type ClangdMode = 'proxy' | 'augment' | 'disabled';
+
+export interface ClangdSettings {
+  enabled: boolean;
+  mode: ClangdMode;
+  path: string;
+  args: string[];
+  compileCommandsDir: string;
+  fallbackFlags: string[];
+  diagnosticsMode: 'all' | 'filtered' | 'none';
+}
+
+export interface BasiliskSettings extends DiagnosticsSettings {
+  diagnosticsOnSave: boolean;
+  diagnosticsOnType: boolean;
+  clangd: ClangdSettings;
+}
+
+export type BasiliskSettingsInput = Omit<Partial<BasiliskSettings>, 'clangd' | 'qcc'> & {
+  clangd?: Partial<ClangdSettings>;
+  qcc?: Partial<QccSettings>;
+};
+
+export const defaultSettings: BasiliskSettings = {
   qccPath: 'qcc',
   basiliskPath: '',
   enableDiagnostics: true,
-  maxNumberOfProblems: 100
+  diagnosticsOnSave: true,
+  diagnosticsOnType: false,
+  maxNumberOfProblems: 100,
+  qcc: {
+    includePaths: []
+  },
+  clangd: {
+    enabled: true,
+    mode: 'proxy',
+    path: 'clangd',
+    args: [],
+    compileCommandsDir: '',
+    fallbackFlags: [],
+    diagnosticsMode: 'filtered'
+  }
 };
 
 /**
@@ -140,7 +187,8 @@ function createDiagnostic(parsed: ParsedDiagnostic): Diagnostic {
 export async function runDiagnostics(
   documentUri: string,
   content: string,
-  settings: DiagnosticsSettings
+  settings: DiagnosticsSettings,
+  logger?: DiagnosticsLogger
 ): Promise<Diagnostic[]> {
   if (!settings.enableDiagnostics) {
     return [];
@@ -148,12 +196,17 @@ export async function runDiagnostics(
 
   const diagnostics: Diagnostic[] = [];
   let tempFile: string | null = null;
+  const originalPath = documentUri.startsWith('file://')
+    ? documentUri.replace('file://', '')
+    : documentUri;
+  const originalDir = path.dirname(originalPath);
+  const srcLocalDir = findSrcLocalDir(originalDir);
 
   try {
     // Create a temporary file with the content
-    const tempDir = os.tmpdir();
+    const tempRoot = os.tmpdir();
     const fileName = path.basename(documentUri);
-    tempFile = path.join(tempDir, `basilisk_${Date.now()}_${fileName}`);
+    tempFile = path.join(tempRoot, `basilisk_${Date.now()}_${fileName}`);
 
     // Ensure the temp file has .c extension for qcc
     if (!tempFile.endsWith('.c')) {
@@ -162,12 +215,37 @@ export async function runDiagnostics(
 
     fs.writeFileSync(tempFile, content);
 
-    // Build qcc command
+    const tempDir = path.dirname(tempFile);
+    const tempBase = path.basename(tempFile);
+
+    // Build qcc command. Use the basename and run from the temp directory so
+    // qcc can generate its intermediate -cpp.c file alongside the input.
     const args: string[] = [
       '-Wall',           // Enable all warnings
-      '-fsyntax-only',   // Only check syntax, don't compile
-      tempFile
+      '-fsyntax-only'    // Only check syntax, don't compile
     ];
+
+    const includeDirs: string[] = [];
+    if (originalDir && originalDir !== tempDir) {
+      includeDirs.push(originalDir);
+    }
+    if (srcLocalDir && srcLocalDir !== tempDir && srcLocalDir !== originalDir) {
+      includeDirs.push(srcLocalDir);
+    }
+    if (settings.qcc?.includePaths?.length) {
+      includeDirs.push(...settings.qcc.includePaths);
+    }
+
+    const seen = new Set<string>();
+    for (const includeDir of includeDirs) {
+      if (!includeDir || seen.has(includeDir)) {
+        continue;
+      }
+      seen.add(includeDir);
+      args.push('-I', includeDir);
+    }
+
+    args.push(tempBase);
 
     // Set up environment
     const env: NodeJS.ProcessEnv = { ...process.env };
@@ -178,7 +256,7 @@ export async function runDiagnostics(
     // Run qcc
     const result = await runCommand(settings.qccPath, args, {
       env,
-      cwd: path.dirname(documentUri.replace('file://', ''))
+      cwd: tempDir
     });
 
     // Parse output
@@ -211,6 +289,9 @@ export async function runDiagnostics(
         source: 'basilisk-lsp',
         message: `qcc compiler not found at '${settings.qccPath}'. Set basilisk.qccPath in settings.`
       });
+    } else if (logger) {
+      const message = err?.message ? err.message : String(error);
+      logger.warn(`qcc diagnostics failed: ${message}`);
     }
   } finally {
     // Clean up temp file

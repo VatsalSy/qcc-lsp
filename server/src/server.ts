@@ -16,8 +16,10 @@ import {
   TextDocumentSyncKind,
   CompletionItem,
   CompletionParams,
+  CompletionList,
   HoverParams,
   Hover,
+  MarkupKind,
   DefinitionParams,
   Definition,
   DocumentSymbolParams,
@@ -30,28 +32,27 @@ import {
   SemanticTokens,
   SemanticTokensLegend,
   SemanticTokensBuilder,
-  DidChangeConfigurationNotification
+  DidChangeConfigurationNotification,
+  WorkspaceFolder
 } from 'vscode-languageserver/node';
 
 import { TextDocument } from 'vscode-languageserver-textdocument';
+import { URI } from 'vscode-uri';
+import * as path from 'path';
 
 import {
   createCompletionItems,
   getHoverDocumentation,
   isBasiliskKeyword,
   getKeywordCategory,
-  CONTROL_KEYWORDS,
-  FIELD_TYPES,
-  BUILTIN_FUNCTIONS,
-  CONSTANTS,
-  LOOP_VARIABLES,
-  MPI_KEYWORDS
+  BUILTIN_FUNCTIONS
 } from './basiliskLanguage';
 
 import {
   runDiagnostics,
   quickValidate,
-  DiagnosticsSettings,
+  BasiliskSettings,
+  BasiliskSettingsInput,
   defaultSettings,
   checkQccAvailable
 } from './diagnostics';
@@ -62,6 +63,16 @@ import {
   findReferences
 } from './symbols';
 
+import { ClangdClient } from './clangdClient';
+import {
+  resolvePathSetting,
+  resolveBasiliskRoot,
+  deriveBasiliskFallbackFlags,
+  mergeFlags
+} from './clangdConfig';
+import { filterClangdDiagnostics } from './basiliskDetect';
+import { loadProjectConfig, ProjectConfig } from './projectConfig';
+
 // Create connection and document manager
 const connection = createConnection(ProposedFeatures.all);
 const documents: TextDocuments<TextDocument> = new TextDocuments(TextDocument);
@@ -70,8 +81,23 @@ const documents: TextDocuments<TextDocument> = new TextDocuments(TextDocument);
 const symbolIndex = new SymbolIndex();
 
 // Settings
-let globalSettings: DiagnosticsSettings = defaultSettings;
-const documentSettings: Map<string, Thenable<DiagnosticsSettings>> = new Map();
+let globalSettings: BasiliskSettings = defaultSettings;
+const documentSettings: Map<string, Thenable<BasiliskSettings>> = new Map();
+
+// Workspace info
+let workspaceRootUri: string | null = null;
+let workspaceFolders: WorkspaceFolder[] | null = null;
+
+// clangd integration
+let clangdClient: ClangdClient | null = null;
+let clangdConfigKey: string | null = null;
+const clangdDiagnostics: Map<string, Diagnostic[]> = new Map();
+const localDiagnostics: Map<string, Diagnostic[]> = new Map();
+const clangdDiagnosticsGeneration: Map<string, number> = new Map();
+const localDiagnosticsVersion: Map<string, number> = new Map();
+
+// Initialize params cache
+let initializeParams: InitializeParams | null = null;
 
 // Capability flags
 let hasConfigurationCapability = false;
@@ -80,6 +106,8 @@ let hasDiagnosticRelatedInformationCapability = false;
 
 // Cached completion items
 let completionItems: CompletionItem[] | null = null;
+
+const projectConfigWarnings = new Set<string>();
 
 // Semantic token types and modifiers
 const tokenTypes = [
@@ -117,6 +145,10 @@ const legend: SemanticTokensLegend = {
  * Initialize the server
  */
 connection.onInitialize((params: InitializeParams): InitializeResult => {
+  initializeParams = params;
+  workspaceRootUri = params.rootUri ?? null;
+  workspaceFolders = params.workspaceFolders ?? null;
+
   const capabilities = params.capabilities;
 
   hasConfigurationCapability = !!(
@@ -130,6 +162,10 @@ connection.onInitialize((params: InitializeParams): InitializeResult => {
     capabilities.textDocument.publishDiagnostics &&
     capabilities.textDocument.publishDiagnostics.relatedInformation
   );
+
+  const initOptions = params.initializationOptions as { basilisk?: { clangd?: { mode?: string } } } | undefined;
+  const initClangdMode = initOptions?.basilisk?.clangd?.mode;
+  const disableCoreProviders = initClangdMode === 'augment';
 
   const result: InitializeResult = {
     capabilities: {
@@ -145,22 +181,24 @@ connection.onInitialize((params: InitializeParams): InitializeResult => {
       hoverProvider: true,
 
       // Go to definition
-      definitionProvider: true,
+      definitionProvider: !disableCoreProviders,
 
       // Find references
-      referencesProvider: true,
+      referencesProvider: !disableCoreProviders,
 
       // Document symbols
-      documentSymbolProvider: true,
+      documentSymbolProvider: !disableCoreProviders,
 
       // Workspace symbols
-      workspaceSymbolProvider: true,
+      workspaceSymbolProvider: !disableCoreProviders,
 
       // Semantic tokens
-      semanticTokensProvider: {
-        legend,
-        full: true
-      }
+      semanticTokensProvider: disableCoreProviders
+        ? undefined
+        : {
+          legend,
+          full: true
+        }
     }
   };
 
@@ -183,39 +221,73 @@ connection.onInitialized(async () => {
     connection.client.register(DidChangeConfigurationNotification.type, undefined);
   }
 
-  // Check if qcc is available
-  const qccAvailable = await checkQccAvailable(globalSettings.qccPath);
-  if (!qccAvailable) {
-    connection.console.warn(
-      `qcc compiler not found at '${globalSettings.qccPath}'. ` +
-      'Diagnostics will be limited. Set basilisk.qccPath in settings.'
-    );
-  } else {
-    connection.console.log('Basilisk LSP server initialized with qcc support');
+  await refreshGlobalSettings();
+  const qccAvailable = await checkQccAndLog(globalSettings);
+  try {
+    await ensureClangd(globalSettings, qccAvailable);
+  } catch (error) {
+    if (!qccAvailable) {
+      const message = `clangd error: ${(error as Error).message}`;
+      connection.console.error(message);
+      void connection.window.showErrorMessage(message);
+    }
   }
 });
 
 /**
  * Configuration change handler
  */
-connection.onDidChangeConfiguration(change => {
+connection.onDidChangeConfiguration(async change => {
   if (hasConfigurationCapability) {
     documentSettings.clear();
+    await refreshGlobalSettings();
   } else {
-    globalSettings = {
-      ...defaultSettings,
-      ...(change.settings?.basilisk || {})
-    };
+    const rootPath = getWorkspaceRootPath();
+    const base = applyProjectConfig(defaultSettings, rootPath);
+    const merged = mergeSettings(base, (change.settings?.basilisk || {}) as BasiliskSettingsInput);
+    globalSettings = resolveQccIncludePaths(merged, rootPath);
+  }
+
+  const qccAvailable = await checkQccAndLog(globalSettings);
+  try {
+    await ensureClangd(globalSettings, qccAvailable);
+  } catch (error) {
+    if (!qccAvailable) {
+      const message = `clangd error: ${(error as Error).message}`;
+      connection.console.error(message);
+      void connection.window.showErrorMessage(message);
+    }
   }
 
   // Revalidate all open documents
-  documents.all().forEach(validateTextDocument);
+  documents.all().forEach((document) => {
+    void validateTextDocument(document, 'open');
+  });
+});
+
+connection.onDidChangeWatchedFiles(async () => {
+  documentSettings.clear();
+  await refreshGlobalSettings();
+  const qccAvailable = await checkQccAndLog(globalSettings);
+  try {
+    await ensureClangd(globalSettings, qccAvailable);
+  } catch (error) {
+    if (!qccAvailable) {
+      const message = `clangd error: ${(error as Error).message}`;
+      connection.console.error(message);
+      void connection.window.showErrorMessage(message);
+    }
+  }
+
+  documents.all().forEach((document) => {
+    void validateTextDocument(document, 'open');
+  });
 });
 
 /**
  * Get document settings
  */
-function getDocumentSettings(resource: string): Thenable<DiagnosticsSettings> {
+function getDocumentSettings(resource: string): Thenable<BasiliskSettings> {
   if (!hasConfigurationCapability) {
     return Promise.resolve(globalSettings);
   }
@@ -224,6 +296,12 @@ function getDocumentSettings(resource: string): Thenable<DiagnosticsSettings> {
     result = connection.workspace.getConfiguration({
       scopeUri: resource,
       section: 'basilisk'
+    }).then((config) => {
+      const filePath = URI.parse(resource).fsPath;
+      const base = applyProjectConfig(defaultSettings, path.dirname(filePath));
+      const merged = mergeSettings(base, config as BasiliskSettingsInput);
+      const rootPath = getWorkspaceRootPath() || path.dirname(filePath);
+      return resolveQccIncludePaths(merged, rootPath);
     });
     documentSettings.set(resource, result);
   }
@@ -235,7 +313,8 @@ function getDocumentSettings(resource: string): Thenable<DiagnosticsSettings> {
  */
 documents.onDidOpen(event => {
   symbolIndex.indexDocument(event.document);
-  validateTextDocument(event.document);
+  forwardDidOpen(event.document);
+  void validateTextDocument(event.document, 'open');
 });
 
 /**
@@ -243,7 +322,8 @@ documents.onDidOpen(event => {
  */
 documents.onDidChangeContent(change => {
   symbolIndex.indexDocument(change.document);
-  validateTextDocument(change.document);
+  forwardDidChange(change.document);
+  void validateTextDocument(change.document, 'change');
 });
 
 /**
@@ -252,86 +332,453 @@ documents.onDidChangeContent(change => {
 documents.onDidClose(event => {
   documentSettings.delete(event.document.uri);
   symbolIndex.removeDocument(event.document.uri);
+  localDiagnostics.delete(event.document.uri);
+  localDiagnosticsVersion.delete(event.document.uri);
+  clangdDiagnostics.delete(event.document.uri);
+  clangdDiagnosticsGeneration.delete(event.document.uri);
   connection.sendDiagnostics({ uri: event.document.uri, diagnostics: [] });
+  forwardDidClose(event.document);
 });
 
 /**
  * Document saved - run full diagnostics
  */
 documents.onDidSave(async event => {
-  const settings = await getDocumentSettings(event.document.uri);
-  if (settings.enableDiagnostics) {
-    const diagnostics = await runDiagnostics(
-      event.document.uri,
-      event.document.getText(),
-      settings
-    );
-    connection.sendDiagnostics({ uri: event.document.uri, diagnostics });
-  }
+  forwardDidSave(event.document);
+  void validateTextDocument(event.document, 'save');
 });
 
 /**
  * Validate a document
  */
-async function validateTextDocument(document: TextDocument): Promise<void> {
+type DiagnosticsTrigger = 'open' | 'change' | 'save';
+
+async function validateTextDocument(document: TextDocument, trigger: DiagnosticsTrigger): Promise<void> {
   const settings = await getDocumentSettings(document.uri);
+  if (trigger === 'change' && !settings.diagnosticsOnType) {
+    return;
+  }
+  if (trigger === 'save' && !settings.diagnosticsOnSave) {
+    return;
+  }
+  const version = document.version;
+  localDiagnosticsVersion.set(document.uri, version);
+  const diagnostics = await collectLocalDiagnostics(document, settings, trigger);
+  if (localDiagnosticsVersion.get(document.uri) !== version) {
+    return;
+  }
+  localDiagnostics.set(document.uri, diagnostics);
+  publishDiagnostics(document.uri, settings);
+}
 
-  // Quick validation (always run)
-  const quickDiagnostics = quickValidate(document.getText());
+function mergeStringArrays(primary: string[], secondary: string[] | undefined): string[] {
+  if (!secondary || secondary.length === 0) {
+    return primary;
+  }
+  const seen = new Set<string>();
+  const merged: string[] = [];
+  for (const entry of [...primary, ...secondary]) {
+    if (!entry || seen.has(entry)) {
+      continue;
+    }
+    seen.add(entry);
+    merged.push(entry);
+  }
+  return merged;
+}
 
-  // Full validation with qcc (optional, can be slow)
-  let compilerDiagnostics: Diagnostic[] = [];
-  if (settings.enableDiagnostics) {
+function mergeSettings(base: BasiliskSettings, partial: BasiliskSettingsInput): BasiliskSettings {
+  const mergedQcc = {
+    ...base.qcc,
+    ...(partial.qcc || {})
+  };
+  mergedQcc.includePaths = mergeStringArrays(
+    base.qcc?.includePaths ?? [],
+    partial.qcc?.includePaths
+  );
+
+  return {
+    ...base,
+    ...partial,
+    qcc: mergedQcc,
+    clangd: {
+      ...base.clangd,
+      ...(partial.clangd || {})
+    }
+  };
+}
+
+function projectConfigToSettings(config: ProjectConfig): BasiliskSettingsInput {
+  const partial: BasiliskSettingsInput = {};
+  if (config.qccPath) {
+    partial.qccPath = config.qccPath;
+  }
+  if (config.basiliskPath) {
+    partial.basiliskPath = config.basiliskPath;
+  }
+  if (config.qcc?.includePaths) {
+    partial.qcc = { includePaths: config.qcc.includePaths };
+  }
+  if (config.clangd) {
+    partial.clangd = { ...config.clangd };
+  }
+  return partial;
+}
+
+function applyProjectConfig(base: BasiliskSettings, startDir: string | null): BasiliskSettings {
+  if (!startDir) {
+    return base;
+  }
+  const result = loadProjectConfig(startDir);
+  if (result.error && result.path && !projectConfigWarnings.has(result.path)) {
+    projectConfigWarnings.add(result.path);
+    connection.console.warn(`Failed to parse ${result.path}: ${result.error}`);
+  }
+  if (!result.config) {
+    return base;
+  }
+  return mergeSettings(base, projectConfigToSettings(result.config));
+}
+
+function resolveQccIncludePaths(settings: BasiliskSettings, baseDir: string | null): BasiliskSettings {
+  const includePaths = settings.qcc?.includePaths ?? [];
+  if (includePaths.length === 0) {
+    return settings;
+  }
+  const resolved = includePaths.map((entry) => resolvePathSetting(entry, baseDir));
+  return {
+    ...settings,
+    qcc: {
+      ...settings.qcc,
+      includePaths: resolved
+    }
+  };
+}
+
+async function refreshGlobalSettings(): Promise<void> {
+  if (!hasConfigurationCapability) {
+    return;
+  }
+
+  try {
+    const config = await connection.workspace.getConfiguration({ section: 'basilisk' });
+    const rootPath = getWorkspaceRootPath();
+    const base = applyProjectConfig(defaultSettings, rootPath);
+    const merged = mergeSettings(base, config as BasiliskSettingsInput);
+    globalSettings = resolveQccIncludePaths(merged, rootPath);
+  } catch {
+    const rootPath = getWorkspaceRootPath();
+    const base = applyProjectConfig(defaultSettings, rootPath);
+    globalSettings = resolveQccIncludePaths(base, rootPath);
+  }
+}
+
+async function checkQccAndLog(settings: BasiliskSettings): Promise<boolean> {
+  const qccAvailable = await checkQccAvailable(settings.qccPath);
+  if (!settings.enableDiagnostics) {
+    return qccAvailable;
+  }
+
+  if (!qccAvailable) {
+    connection.console.warn(
+      `qcc compiler not found at '${settings.qccPath}'. ` +
+      'Diagnostics will be limited. Set basilisk.qccPath in settings.'
+    );
+  } else {
+    connection.console.log('Basilisk LSP server initialized with qcc support');
+  }
+  return qccAvailable;
+}
+
+function getWorkspaceRootPath(): string | null {
+  if (workspaceRootUri) {
+    return URI.parse(workspaceRootUri).fsPath;
+  }
+  if (workspaceFolders && workspaceFolders.length > 0) {
+    return URI.parse(workspaceFolders[0].uri).fsPath;
+  }
+  return null;
+}
+
+function buildClangdConfigKey(settings: BasiliskSettings, args: string[], compileCommandsDir: string): string {
+  return JSON.stringify({
+    path: settings.clangd.path,
+    args,
+    compileCommandsDir,
+    fallbackFlags: settings.clangd.fallbackFlags
+  });
+}
+
+async function ensureClangd(settings: BasiliskSettings, qccAvailable: boolean): Promise<void> {
+  const clangdSettings = settings.clangd;
+  const shouldEnable = clangdSettings.enabled && clangdSettings.mode === 'proxy' && !qccAvailable;
+
+  if (!shouldEnable) {
+    await stopClangd();
+    return;
+  }
+
+  if (!initializeParams) {
+    return;
+  }
+
+  const rootPath = getWorkspaceRootPath();
+  const basiliskRoot = resolveBasiliskRoot(settings, rootPath);
+  const compileCommandsDir =
+    resolvePathSetting(clangdSettings.compileCommandsDir, rootPath) ||
+    (basiliskRoot ? basiliskRoot : '');
+  const args = [...clangdSettings.args];
+  if (compileCommandsDir) {
+    args.push(`--compile-commands-dir=${compileCommandsDir}`);
+  }
+
+  const derivedFallbackFlags = deriveBasiliskFallbackFlags(basiliskRoot);
+  const fallbackFlags = mergeFlags(clangdSettings.fallbackFlags, derivedFallbackFlags);
+
+  const nextKey = buildClangdConfigKey(
+    {
+      ...settings,
+      clangd: {
+        ...settings.clangd,
+        fallbackFlags
+      }
+    },
+    args,
+    compileCommandsDir
+  );
+  if (clangdClient && clangdConfigKey === nextKey && clangdClient.isReady()) {
+    return;
+  }
+
+  await stopClangd();
+
+  clangdClient = new ClangdClient(
+    {
+      path: clangdSettings.path,
+      args,
+      rootUri: workspaceRootUri,
+      workspaceFolders,
+      fallbackFlags
+    },
+    connection.console
+  );
+
+  clangdClient.onDiagnostics((uri, diagnostics) => {
+    const normalized = diagnostics.map((diagnostic) => ({
+      ...diagnostic,
+      source: diagnostic.source || 'clangd'
+    }));
+    const generation = (clangdDiagnosticsGeneration.get(uri) ?? 0) + 1;
+    clangdDiagnosticsGeneration.set(uri, generation);
+    void (async () => {
+      const settings = await getDocumentSettings(uri);
+      if (clangdDiagnosticsGeneration.get(uri) !== generation) {
+        return;
+      }
+
+      let nextDiagnostics: Diagnostic[] = [];
+      if (settings.clangd.diagnosticsMode === 'none') {
+        nextDiagnostics = [];
+      } else if (settings.clangd.diagnosticsMode === 'filtered') {
+        const document = documents.get(uri);
+        nextDiagnostics = document
+          ? filterClangdDiagnostics(normalized, document.getText())
+          : normalized;
+      } else {
+        nextDiagnostics = normalized;
+      }
+
+      clangdDiagnostics.set(uri, nextDiagnostics);
+      if (settings.diagnosticsOnType) {
+        publishDiagnostics(uri, settings);
+      }
+    })();
+  });
+
+  clangdClient.onLog((message) => {
+    connection.console.log(message.trim());
+  });
+
+  try {
+    await clangdClient.start(initializeParams);
+    clangdConfigKey = nextKey;
+    if (!clangdClient.isReady()) {
+      await stopClangd();
+      throw new Error('clangd failed to initialize');
+    }
+  } catch (error) {
+    await stopClangd();
+    throw error;
+  }
+}
+
+async function stopClangd(): Promise<void> {
+  if (clangdClient) {
+    await clangdClient.stop();
+  }
+  clangdClient = null;
+  clangdConfigKey = null;
+  clangdDiagnostics.clear();
+  clangdDiagnosticsGeneration.clear();
+}
+
+function shouldProxyToClangd(settings: BasiliskSettings): boolean {
+  return (
+    settings.clangd.enabled &&
+    settings.clangd.mode === 'proxy' &&
+    clangdClient !== null &&
+    clangdClient.isReady()
+  );
+}
+
+async function collectLocalDiagnostics(
+  document: TextDocument,
+  settings: BasiliskSettings,
+  trigger: DiagnosticsTrigger
+): Promise<Diagnostic[]> {
+  const diagnostics: Diagnostic[] = [];
+  const runOnType = settings.diagnosticsOnType;
+  const runOnSave = settings.diagnosticsOnSave;
+
+  const runQuick =
+    trigger === 'open' ||
+    (trigger === 'change' && runOnType) ||
+    (trigger === 'save' && runOnSave);
+
+  if (runQuick) {
+    diagnostics.push(...quickValidate(document.getText()));
+  }
+
+  const runQcc =
+    settings.enableDiagnostics &&
+    ((trigger === 'change' && runOnType) || (trigger === 'save' && runOnSave));
+
+  if (runQcc) {
     try {
-      compilerDiagnostics = await runDiagnostics(
+      const compilerDiagnostics = await runDiagnostics(
         document.uri,
         document.getText(),
-        settings
+        settings,
+        connection.console
       );
-    } catch {
-      // Compiler validation failed, use quick validation only
+      diagnostics.push(...compilerDiagnostics);
+    } catch (error) {
+      const message = (error as Error)?.message || String(error);
+      connection.console.warn(`qcc diagnostics failed: ${message}`);
     }
   }
 
-  // Combine diagnostics
-  const allDiagnostics = [...quickDiagnostics, ...compilerDiagnostics];
-
-  // Limit number of problems
-  const limitedDiagnostics = allDiagnostics.slice(0, settings.maxNumberOfProblems);
-
-  connection.sendDiagnostics({ uri: document.uri, diagnostics: limitedDiagnostics });
+  return diagnostics;
 }
 
-/**
- * Completion handler
- */
-connection.onCompletion((params: CompletionParams): CompletionItem[] => {
-  // Lazy initialization of completion items
+function publishDiagnostics(uri: string, settings: BasiliskSettings): void {
+  const clangd = clangdDiagnostics.get(uri) || [];
+  const local = localDiagnostics.get(uri) || [];
+  const merged = dedupeDiagnostics([...clangd, ...local]);
+  const limited = merged.slice(0, settings.maxNumberOfProblems);
+  connection.sendDiagnostics({ uri, diagnostics: limited });
+}
+
+function dedupeDiagnostics(diagnostics: Diagnostic[]): Diagnostic[] {
+  const seen = new Set<string>();
+  const result: Diagnostic[] = [];
+
+  for (const diagnostic of diagnostics) {
+    const key = [
+      diagnostic.range.start.line,
+      diagnostic.range.start.character,
+      diagnostic.range.end.line,
+      diagnostic.range.end.character,
+      diagnostic.severity ?? '',
+      diagnostic.message,
+      diagnostic.source ?? ''
+    ].join(':');
+    if (seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    result.push(diagnostic);
+  }
+
+  return result;
+}
+
+function forwardDidOpen(document: TextDocument): void {
+  if (!clangdClient) {
+    return;
+  }
+
+  clangdClient.notify('textDocument/didOpen', {
+    textDocument: {
+      uri: document.uri,
+      languageId: document.languageId,
+      version: document.version,
+      text: document.getText()
+    }
+  });
+}
+
+function forwardDidChange(document: TextDocument): void {
+  if (!clangdClient) {
+    return;
+  }
+
+  clangdClient.notify('textDocument/didChange', {
+    textDocument: {
+      uri: document.uri,
+      version: document.version
+    },
+    contentChanges: [
+      {
+        text: document.getText()
+      }
+    ]
+  });
+}
+
+function forwardDidClose(document: TextDocument): void {
+  if (!clangdClient) {
+    return;
+  }
+
+  clangdClient.notify('textDocument/didClose', {
+    textDocument: { uri: document.uri }
+  });
+}
+
+function forwardDidSave(document: TextDocument): void {
+  if (!clangdClient) {
+    return;
+  }
+
+  clangdClient.notify('textDocument/didSave', {
+    textDocument: { uri: document.uri }
+  });
+}
+
+function getBasiliskCompletionItems(
+  document: TextDocument | undefined,
+  params: CompletionParams
+): CompletionItem[] {
   if (!completionItems) {
     completionItems = createCompletionItems();
   }
 
-  const document = documents.get(params.textDocument.uri);
   if (!document) {
     return completionItems;
   }
 
-  // Get context around cursor
   const text = document.getText();
   const offset = document.offsetAt(params.position);
-
-  // Check for include completion
   const lineStart = text.lastIndexOf('\n', offset - 1) + 1;
   const lineText = text.slice(lineStart, offset);
 
   if (/#include\s*["<]/.test(lineText)) {
-    // Return header completions
     return completionItems.filter(item =>
       item.label.endsWith('.h') || item.label.includes('/')
     );
   }
 
-  // Check for field component completion (e.g., "u.")
   if (/\w+\.$/.test(lineText)) {
     return [
       { label: 'x', kind: 5, detail: 'X component' },
@@ -341,40 +788,83 @@ connection.onCompletion((params: CompletionParams): CompletionItem[] => {
   }
 
   return completionItems;
-});
+}
 
-/**
- * Completion item resolution
- */
-connection.onCompletionResolve((item: CompletionItem): CompletionItem => {
-  // Add additional documentation if available
-  const doc = getHoverDocumentation(item.label);
-  if (doc && !item.documentation) {
-    item.documentation = {
-      kind: 'markdown',
-      value: doc
-    };
-  }
-  return item;
-});
-
-/**
- * Hover handler
- */
-connection.onHover((params: HoverParams): Hover | null => {
-  const document = documents.get(params.textDocument.uri);
-  if (!document) {
-    return null;
+function normalizeCompletionResult(
+  result: CompletionItem[] | CompletionList | null | undefined
+): CompletionList {
+  if (!result) {
+    return { isIncomplete: false, items: [] };
   }
 
+  if (Array.isArray(result)) {
+    return { isIncomplete: false, items: result };
+  }
+
+  return result;
+}
+
+function tagCompletionItems(items: CompletionItem[], source: string): CompletionItem[] {
+  return items.map((item) => {
+    const tagged = { ...item } as CompletionItem & { _basiliskSource?: string };
+    if (tagged.data && typeof tagged.data === 'object' && !Array.isArray(tagged.data)) {
+      tagged.data = {
+        ...tagged.data,
+        _basiliskSource: source
+      };
+    } else {
+      tagged._basiliskSource = source;
+    }
+    return tagged;
+  });
+}
+
+function isClangdCompletionItem(item: CompletionItem): boolean {
+  const data = item.data as { _basiliskSource?: string } | undefined;
+  if (data && data._basiliskSource === 'clangd') {
+    return true;
+  }
+
+  const tagged = item as CompletionItem & { _basiliskSource?: string };
+  return tagged._basiliskSource === 'clangd';
+}
+
+function mergeCompletionResults(
+  clangdResult: CompletionItem[] | CompletionList | null | undefined,
+  basiliskItems: CompletionItem[]
+): CompletionList {
+  const clangdList = normalizeCompletionResult(clangdResult);
+  const taggedClangd = tagCompletionItems(clangdList.items, 'clangd');
+  const taggedBasilisk = tagCompletionItems(basiliskItems, 'basilisk');
+
+  const seen = new Set<string>();
+  const merged: CompletionItem[] = [];
+
+  const pushItem = (item: CompletionItem) => {
+    const key = item.label;
+    if (seen.has(key)) {
+      return;
+    }
+    seen.add(key);
+    merged.push(item);
+  };
+
+  taggedClangd.forEach(pushItem);
+  taggedBasilisk.forEach(pushItem);
+
+  return {
+    isIncomplete: clangdList.isIncomplete ?? false,
+    items: merged
+  };
+}
+
+function buildBasiliskHover(document: TextDocument, params: HoverParams): Hover | null {
   const symbolInfo = findSymbolAtPosition(document, params.position);
   if (!symbolInfo) {
     return null;
   }
 
   const { word } = symbolInfo;
-
-  // Check for Basilisk documentation
   const doc = getHoverDocumentation(word);
   if (doc) {
     return {
@@ -385,7 +875,6 @@ connection.onHover((params: HoverParams): Hover | null => {
     };
   }
 
-  // Check if it's a known keyword
   if (isBasiliskKeyword(word)) {
     const category = getKeywordCategory(word);
     return {
@@ -396,7 +885,6 @@ connection.onHover((params: HoverParams): Hover | null => {
     };
   }
 
-  // Check if it's a user-defined symbol
   const symbol = symbolIndex.findDefinition(word);
   if (symbol) {
     return {
@@ -408,15 +896,144 @@ connection.onHover((params: HoverParams): Hover | null => {
   }
 
   return null;
+}
+
+function mergeHovers(primary: Hover | null, secondary: Hover | null): Hover | null {
+  if (!primary && !secondary) {
+    return null;
+  }
+  if (primary && !secondary) {
+    return primary;
+  }
+  if (!primary && secondary) {
+    return secondary;
+  }
+
+  const primaryContents = primary?.contents;
+  const secondaryContents = secondary?.contents;
+  const combined: Hover = {
+    contents: []
+  };
+
+  const pushContent = (content: Hover['contents'] | undefined) => {
+    if (!content) {
+      return;
+    }
+    if (Array.isArray(content)) {
+      (combined.contents as typeof content).push(...content);
+      return;
+    }
+    (combined.contents as typeof content[]).push(content);
+  };
+
+  pushContent(primaryContents);
+  if (secondaryContents) {
+    const separator = { kind: MarkupKind.Markdown, value: '\n---\n' };
+    pushContent(separator);
+    pushContent(secondaryContents);
+  }
+
+  if (primary?.range) {
+    combined.range = primary.range;
+  }
+
+  return combined;
+}
+
+/**
+ * Completion handler
+ */
+connection.onCompletion(async (params: CompletionParams): Promise<CompletionItem[] | CompletionList> => {
+  const document = documents.get(params.textDocument.uri);
+  const basiliskItems = getBasiliskCompletionItems(document, params);
+  const settings = await getDocumentSettings(params.textDocument.uri);
+
+  if (!shouldProxyToClangd(settings)) {
+    return basiliskItems;
+  }
+
+  try {
+    const clangdResult = await clangdClient?.request('textDocument/completion', params);
+    return mergeCompletionResults(
+      clangdResult as CompletionItem[] | CompletionList | null | undefined,
+      basiliskItems
+    );
+  } catch {
+    return basiliskItems;
+  }
+});
+
+/**
+ * Completion item resolution
+ */
+connection.onCompletionResolve(async (item: CompletionItem): Promise<CompletionItem> => {
+  let resolved = item;
+
+  if (isClangdCompletionItem(item) && clangdClient?.isReady()) {
+    try {
+      const clangdResolved = await clangdClient.request('completionItem/resolve', item);
+      if (clangdResolved) {
+        resolved = clangdResolved as CompletionItem;
+      }
+    } catch {
+      // Fall back to existing item.
+    }
+  }
+
+  const doc = getHoverDocumentation(resolved.label);
+  if (doc && !resolved.documentation) {
+    resolved.documentation = {
+      kind: 'markdown',
+      value: doc
+    };
+  }
+  return resolved;
+});
+
+/**
+ * Hover handler
+ */
+connection.onHover(async (params: HoverParams): Promise<Hover | null> => {
+  const document = documents.get(params.textDocument.uri);
+  if (!document) {
+    return null;
+  }
+
+  const settings = await getDocumentSettings(params.textDocument.uri);
+  const basiliskHover = buildBasiliskHover(document, params);
+  let clangdHover: Hover | null = null;
+
+  if (shouldProxyToClangd(settings)) {
+    try {
+      const result = await clangdClient?.request('textDocument/hover', params);
+      clangdHover = (result as Hover) || null;
+    } catch {
+      clangdHover = null;
+    }
+  }
+
+  return mergeHovers(clangdHover, basiliskHover);
 });
 
 /**
  * Go to definition handler
  */
-connection.onDefinition((params: DefinitionParams): Definition | null => {
+connection.onDefinition(async (params: DefinitionParams): Promise<Definition | null> => {
   const document = documents.get(params.textDocument.uri);
   if (!document) {
     return null;
+  }
+
+  const settings = await getDocumentSettings(params.textDocument.uri);
+  if (shouldProxyToClangd(settings)) {
+    try {
+      const result = await clangdClient?.request('textDocument/definition', params);
+      if (result) {
+        return result as Definition;
+      }
+    } catch {
+      // Fall back to Basilisk symbols.
+    }
   }
 
   const symbolInfo = findSymbolAtPosition(document, params.position);
@@ -440,10 +1057,22 @@ connection.onDefinition((params: DefinitionParams): Definition | null => {
 /**
  * Find references handler
  */
-connection.onReferences((params: ReferenceParams): Location[] => {
+connection.onReferences(async (params: ReferenceParams): Promise<Location[]> => {
   const document = documents.get(params.textDocument.uri);
   if (!document) {
     return [];
+  }
+
+  const settings = await getDocumentSettings(params.textDocument.uri);
+  if (shouldProxyToClangd(settings)) {
+    try {
+      const result = await clangdClient?.request('textDocument/references', params);
+      if (Array.isArray(result)) {
+        return result as Location[];
+      }
+    } catch {
+      // Fall back to Basilisk references.
+    }
   }
 
   const symbolInfo = findSymbolAtPosition(document, params.position);
@@ -463,14 +1092,38 @@ connection.onReferences((params: ReferenceParams): Location[] => {
 /**
  * Document symbols handler
  */
-connection.onDocumentSymbol((params: DocumentSymbolParams): DocumentSymbol[] => {
+connection.onDocumentSymbol(async (params: DocumentSymbolParams): Promise<DocumentSymbol[]> => {
+  const settings = await getDocumentSettings(params.textDocument.uri);
+  if (shouldProxyToClangd(settings)) {
+    try {
+      const result = await clangdClient?.request('textDocument/documentSymbol', params);
+      if (Array.isArray(result)) {
+        return result as DocumentSymbol[];
+      }
+    } catch {
+      // Fall back to Basilisk symbols.
+    }
+  }
+
   return symbolIndex.getDocumentSymbols(params.textDocument.uri);
 });
 
 /**
  * Workspace symbols handler
  */
-connection.onWorkspaceSymbol((params: WorkspaceSymbolParams): SymbolInformation[] => {
+connection.onWorkspaceSymbol(async (params: WorkspaceSymbolParams): Promise<SymbolInformation[]> => {
+  const settings = globalSettings;
+  if (shouldProxyToClangd(settings)) {
+    try {
+      const result = await clangdClient?.request('workspace/symbol', params);
+      if (Array.isArray(result)) {
+        return result as SymbolInformation[];
+      }
+    } catch {
+      // Fall back to Basilisk symbols.
+    }
+  }
+
   const symbols = symbolIndex.findSymbols(params.query);
 
   return symbols.map(s => ({

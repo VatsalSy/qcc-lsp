@@ -192,7 +192,7 @@ function extractSymbols(document: TextDocument): DocumentSymbol[] {
             fieldType,
             lineNum,
             line.indexOf(name),
-            name.length,
+            line.length,
             document
           );
 
@@ -222,7 +222,7 @@ function extractSymbols(document: TextDocument): DocumentSymbol[] {
           varType,
           lineNum,
           line.indexOf(varName),
-          varName.length,
+          line.length,
           document
         );
         symbols.push(symbol);
@@ -281,7 +281,7 @@ function extractSymbols(document: TextDocument): DocumentSymbol[] {
         detail,
         lineNum,
         line.indexOf(macroName),
-        macroName.length,
+        line.length,
         document
       );
       symbols.push(symbol);
@@ -321,13 +321,16 @@ function createSymbol(
   length: number,
   _document: TextDocument
 ): DocumentSymbol {
+  const safeStart = Math.max(0, startCol);
+  const selectionEnd = safeStart + name.length;
+  const rangeEnd = Math.max(length, selectionEnd);
   const range = Range.create(
     Position.create(line, 0),
-    Position.create(line, length)
+    Position.create(line, rangeEnd)
   );
   const selectionRange = Range.create(
-    Position.create(line, startCol),
-    Position.create(line, startCol + name.length)
+    Position.create(line, safeStart),
+    Position.create(line, selectionEnd)
   );
 
   return {
