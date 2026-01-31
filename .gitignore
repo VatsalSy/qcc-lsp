@@ -1,2 +1,12 @@
-test
+node_modules/
 basilisk/
+CLAUDE.md
+client/node_modules/
+server/node_modules/
+client/out/
+server/out/
+out/
+dist/
+*.tsbuildinfo
+*.vsix
+.DS_Store

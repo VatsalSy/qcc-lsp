@@ -204,8 +204,7 @@ function extractSymbols(document: TextDocument): DocumentSymbol[] {
         `event (${eventMatch[2].trim()})`,
         lineNum,
         eventMatch.index,
-        line.length,
-        document
+        line.length
       );
       symbols.push(symbol);
       currentContainer = symbol;
@@ -227,8 +226,7 @@ function extractSymbols(document: TextDocument): DocumentSymbol[] {
           `${returnType} ${funcName}(${params.trim()})`,
           lineNum,
           0,
-          line.length,
-          document
+          line.length
         );
         symbols.push(symbol);
         currentContainer = symbol;
@@ -255,8 +253,7 @@ function extractSymbols(document: TextDocument): DocumentSymbol[] {
             fieldType,
             lineNum,
             line.indexOf(name),
-            line.length,
-            document
+            line.length
           );
 
           if (currentContainer && currentContainer.children) {
@@ -285,8 +282,7 @@ function extractSymbols(document: TextDocument): DocumentSymbol[] {
           varType,
           lineNum,
           line.indexOf(varName),
-          line.length,
-          document
+          line.length
         );
         symbols.push(symbol);
       }
@@ -314,8 +310,7 @@ function extractSymbols(document: TextDocument): DocumentSymbol[] {
               'typedef struct',
               lineNum,
               0,
-              line.length,
-              document
+              line.length
             );
             // Set range to include entire struct
             symbol.range = Range.create(
@@ -335,7 +330,6 @@ function extractSymbols(document: TextDocument): DocumentSymbol[] {
     if (defineMatch) {
       const macroName = defineMatch[1];
       const params = defineMatch[2];
-      const value = defineMatch[3];
 
       const detail = params ? `#define ${macroName}(${params})` : `#define ${macroName}`;
       const symbol = createSymbol(
@@ -344,8 +338,7 @@ function extractSymbols(document: TextDocument): DocumentSymbol[] {
         detail,
         lineNum,
         line.indexOf(macroName),
-        line.length,
-        document
+        line.length
       );
       symbols.push(symbol);
       continue;
@@ -361,8 +354,7 @@ function extractSymbols(document: TextDocument): DocumentSymbol[] {
         'enum',
         lineNum,
         0,
-        line.length,
-        document
+        line.length
       );
       symbols.push(symbol);
       continue;
@@ -381,8 +373,7 @@ function createSymbol(
   detail: string,
   line: number,
   startCol: number,
-  length: number,
-  _document: TextDocument
+  length: number
 ): DocumentSymbol {
   const safeStart = Math.max(0, startCol);
   const selectionEnd = safeStart + name.length;

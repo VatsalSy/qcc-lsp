@@ -425,27 +425,6 @@ export function quickValidate(content: string): Diagnostic[] {
       });
     }
 
-    // Check for reduction outside foreach
-    if (/reduction\s*\(/.test(line) && !/foreach/.test(line)) {
-      // Look back for foreach
-      let inForeach = false;
-      for (let j = i - 1; j >= Math.max(0, i - 20); j--) {
-        if (/foreach/.test(lines[j])) {
-          // Check if we've passed the closing brace
-          let braceCount = 0;
-          for (let k = j; k <= i; k++) {
-            braceCount += (lines[k].match(/{/g) || []).length;
-            braceCount -= (lines[k].match(/}/g) || []).length;
-          }
-          if (braceCount > 0) {
-            inForeach = true;
-          }
-          break;
-        }
-      }
-      // Actually reduction should be in foreach parameters, not body
-      // This is a more nuanced check
-    }
   }
 
   return diagnostics;

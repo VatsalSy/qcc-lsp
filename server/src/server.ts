@@ -102,7 +102,6 @@ let initializeParams: InitializeParams | null = null;
 // Capability flags
 let hasConfigurationCapability = false;
 let hasWorkspaceFolderCapability = false;
-let hasDiagnosticRelatedInformationCapability = false;
 
 // Cached completion items
 let completionItems: CompletionItem[] | null = null;
@@ -157,12 +156,6 @@ connection.onInitialize((params: InitializeParams): InitializeResult => {
   hasWorkspaceFolderCapability = !!(
     capabilities.workspace && !!capabilities.workspace.workspaceFolders
   );
-  hasDiagnosticRelatedInformationCapability = !!(
-    capabilities.textDocument &&
-    capabilities.textDocument.publishDiagnostics &&
-    capabilities.textDocument.publishDiagnostics.relatedInformation
-  );
-
   const initOptions = params.initializationOptions as { basilisk?: { clangd?: { mode?: string } } } | undefined;
   const initClangdMode = initOptions?.basilisk?.clangd?.mode;
   const disableCoreProviders = initClangdMode === 'augment';
