@@ -40,6 +40,7 @@ export function activate(context: vscode.ExtensionContext) {
   };
 
   // Client options
+  const config = vscode.workspace.getConfiguration('basilisk');
   const clientOptions: LanguageClientOptions = {
     // Register for Basilisk C files
     documentSelector: [
@@ -47,11 +48,18 @@ export function activate(context: vscode.ExtensionContext) {
       { scheme: 'file', language: 'c', pattern: '**/*.c' },
       { scheme: 'file', language: 'c', pattern: '**/*.h' }
     ],
+    initializationOptions: {
+      basilisk: {
+        clangd: {
+          mode: config.get<string>('clangd.mode', 'proxy')
+        }
+      }
+    },
     synchronize: {
       // Synchronize settings
       configurationSection: 'basilisk',
-      // Watch for .basiliskrc or similar config files
-      fileEvents: vscode.workspace.createFileSystemWatcher('**/.basiliskrc')
+      // Watch for optional project config
+      fileEvents: vscode.workspace.createFileSystemWatcher('**/.comphy-basilisk')
     }
   };
 
