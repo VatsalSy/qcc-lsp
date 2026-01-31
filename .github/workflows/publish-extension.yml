@@ -14,7 +14,7 @@ on:
     types: [published]
 
 permissions:
-  contents: read
+  contents: write
   packages: write
 
 jobs:
@@ -195,6 +195,7 @@ jobs:
           name: ${{ github.ref_name }}
           generate_release_notes: true
           files: ${{ steps.package.outputs.vsix_name }}
+          token: ${{ secrets.GH_PUBLISH }}
 
       - name: Test mode notice
         if: github.event.inputs.dry_run == 'true'

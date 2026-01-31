@@ -4,9 +4,9 @@
 [![License](https://img.shields.io/github/license/VatsalSy/qcc-lsp)](LICENSE)
 [![Download VSIX](https://img.shields.io/github/v/release/VatsalSy/qcc-lsp?label=download%20VSIX&color=blue)](https://github.com/VatsalSy/qcc-lsp/releases/latest)
 [![GitHub Workflow Status](https://img.shields.io/github/actions/workflow/status/VatsalSy/qcc-lsp/publish-extension.yml?label=publish)](https://github.com/VatsalSy/qcc-lsp/actions)<br>
-[![VS Marketplace Downloads](https://img.shields.io/visual-studio-marketplace/d/basilisk-cfd.basilisk-lsp?label=VS%20Marketplace)](https://marketplace.visualstudio.com/items?itemName=basilisk-cfd.basilisk-lsp)
-[![VS Marketplace Rating](https://img.shields.io/visual-studio-marketplace/r/basilisk-cfd.basilisk-lsp?label=rating)](https://marketplace.visualstudio.com/items?itemName=basilisk-cfd.basilisk-lsp)<br>
-[![Open VSX Downloads](https://img.shields.io/open-vsx/dt/basilisk-cfd/basilisk-lsp?label=Open%20VSX)](https://open-vsx.org/extension/basilisk-cfd/basilisk-lsp)<br>
+[![VS Marketplace Downloads](https://img.shields.io/visual-studio-marketplace/d/vatsalsy.basilisk-lsp?label=VS%20Marketplace)](https://marketplace.visualstudio.com/items?itemName=vatsalsy.basilisk-lsp)
+[![VS Marketplace Rating](https://img.shields.io/visual-studio-marketplace/r/vatsalsy.basilisk-lsp?label=rating)](https://marketplace.visualstudio.com/items?itemName=vatsalsy.basilisk-lsp)<br>
+[![Open VSX Downloads](https://img.shields.io/open-vsx/dt/vatsalsy/basilisk-lsp?label=Open%20VSX)](https://open-vsx.org/extension/vatsalsy/basilisk-lsp)<br>
 
 Language Server Protocol (LSP) implementation for [Basilisk C](http://basilisk.fr/), the domain-specific language for computational fluid dynamics simulations.
 
@@ -99,13 +99,13 @@ npm run compile
 #### VS Marketplace (recommended)
 
 1. Open VS Code and go to Extensions (Ctrl+Shift+X)
-2. Search for **Basilisk C Language Support** (publisher: `basilisk-cfd`)
+2. Search for **Basilisk C Language Support** (publisher: `vatsalsy`)
 3. Install the extension
 
 #### Open VSX
 
 1. Open VS Code and go to Extensions (Ctrl+Shift+X)
-2. Search for **Basilisk C Language Support** (publisher: `basilisk-cfd`)
+2. Search for **Basilisk C Language Support** (publisher: `vatsalsy`)
 3. Install the extension
 
 #### From VSIX (local build)
