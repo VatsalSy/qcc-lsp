@@ -2,7 +2,7 @@
   "name": "basilisk-lsp",
   "displayName": "Basilisk C Language Support",
   "description": "Language Server Protocol support for Basilisk C (CFD framework)",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "author": "QCC-LSP Contributors",
   "license": "MIT",
   "publisher": "basilisk-cfd",
