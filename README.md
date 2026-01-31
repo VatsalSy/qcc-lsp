@@ -2,7 +2,7 @@
 
 [![Version](https://img.shields.io/github/v/release/VatsalSy/qcc-lsp)](https://github.com/VatsalSy/qcc-lsp/releases)
 [![License](https://img.shields.io/github/license/VatsalSy/qcc-lsp)](LICENSE)
-[![Download VSIX](https://img.shields.io/github/v/release/VatsalSy/qcc-lsp?label=download%20VSIX&color=blue)](https://github.com/VatsalSy/qcc-lsp/releases/latest)
+[![Download VSIX](https://img.shields.io/github/v/release/VatsalSy/qcc-lsp?label=download%20VSIX&color=blue)](https://raw.githubusercontent.com/VatsalSy/qcc-lsp/main/basilisk-lsp.vsix)
 [![GitHub Workflow Status](https://img.shields.io/github/actions/workflow/status/VatsalSy/qcc-lsp/publish-extension.yml?label=publish)](https://github.com/VatsalSy/qcc-lsp/actions)<br>
 [![VS Marketplace Downloads](https://img.shields.io/visual-studio-marketplace/d/vatsalsy.basilisk-lsp?label=VS%20Marketplace)](https://marketplace.visualstudio.com/items?itemName=vatsalsy.basilisk-lsp)
 [![VS Marketplace Rating](https://img.shields.io/visual-studio-marketplace/r/vatsalsy.basilisk-lsp?label=rating)](https://marketplace.visualstudio.com/items?itemName=vatsalsy.basilisk-lsp)<br>

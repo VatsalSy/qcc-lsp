@@ -47,12 +47,20 @@ node -p "require('./package.json').version"
 npm run lint && npm test && npm run compile
 ```
 
+### Build VSIX Package (before pushing)
+
+```bash
+npx @vscode/vsce package
+LATEST_VSIX=$(ls -t basilisk-lsp-*.vsix | head -1)
+mv "$LATEST_VSIX" basilisk-lsp.vsix
+```
+
 ### Execute Release
 
 ```bash
 node scripts/bump-version.js <patch|minor|major>
 VERSION=$(node -p "require('./package.json').version")
-git add package.json package-lock.json packages/npm/package.json
+git add package.json package-lock.json packages/npm/package.json basilisk-lsp.vsix
 git commit -m "Release v$VERSION"
 git tag -a "v$VERSION" -m "Release v$VERSION"
 git push --follow-tags

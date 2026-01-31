@@ -8,5 +8,4 @@ server/out/
 out/
 dist/
 *.tsbuildinfo
-*.vsix
 .DS_Store
