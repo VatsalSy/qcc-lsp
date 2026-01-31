@@ -36,7 +36,7 @@ node -p "require('./package.json').version"
 ### Version Bump Decision
 
 | Change Type | Bump | Example |
-|-------------|------|---------|
+| --- | --- | --- |
 | Breaking changes | `major` | 0.1.1 → 1.0.0 |
 | New features | `minor` | 0.1.1 → 0.2.0 |
 | Fixes/docs/refactors | `patch` | 0.1.1 → 0.1.2 |
@@ -54,7 +54,7 @@ node scripts/bump-version.js <patch|minor|major>
 VERSION=$(node -p "require('./package.json').version")
 git add package.json package-lock.json packages/npm/package.json
 git commit -m "Release v$VERSION"
-git tag "v$VERSION"
+git tag -a "v$VERSION" -m "Release v$VERSION"
 git push --follow-tags
 ```
 

@@ -171,7 +171,7 @@ lspconfig.basilisk.setup{}
 
 If you installed the CLI via GitHub Packages, the server entrypoint lives under:
 
-```
+```text
 <npm-global-root>/@vatsalsy/qcc-lsp/server/out/server.js
 ```
 
