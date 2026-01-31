@@ -1,0 +1,30 @@
+{
+  "name": "@vatsalsy/qcc-lsp",
+  "version": "0.1.0",
+  "description": "CLI wrapper and language server for Basilisk C",
+  "license": "MIT",
+  "bin": {
+    "qcc-lsp": "bin/qcc-lsp"
+  },
+  "files": [
+    "bin/",
+    "client/out/",
+    "server/out/",
+    "language-configuration.json",
+    "snippets/",
+    "syntaxes/",
+    "README.md",
+    "LICENSE"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/VatsalSy/qcc-lsp"
+  },
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com",
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

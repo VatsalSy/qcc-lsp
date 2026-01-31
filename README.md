@@ -66,7 +66,7 @@ Basilisk C extends C99 with domain-specific constructs for grid operations, fiel
 
 ### Prerequisites
 
-1. **Node.js** (v18 or later)
+1. **Node.js** (v18 or later) - required for building from source or using the CLI
 2. **Basilisk** installation with `qcc` compiler
    - Follow installation at http://basilisk.fr/src/INSTALL
 3. **clangd** (optional, but recommended for deep C/C++ semantics)
@@ -88,18 +88,64 @@ npm run compile
 
 ### VS Code Extension
 
-1. Build the extension as above
-2. Open VS Code and go to Extensions (Ctrl+Shift+X)
-3. Click "..." > "Install from VSIX..."
-4. Select the generated `.vsix` file
+#### VS Marketplace (recommended)
 
-Or for development:
+1. Open VS Code and go to Extensions (Ctrl+Shift+X)
+2. Search for **Basilisk C Language Support** (publisher: `basilisk-cfd`)
+3. Install the extension
+
+#### Open VSX
+
+1. Open VS Code and go to Extensions (Ctrl+Shift+X)
+2. Search for **Basilisk C Language Support** (publisher: `basilisk-cfd`)
+3. Install the extension
+
+#### From VSIX (local build)
+
+```bash
+npm install
+npm run compile
+npx @vscode/vsce package
+```
+
+Then in VS Code:
+
+1. Open Extensions (Ctrl+Shift+X)
+2. Click "..." > "Install from VSIX..."
+3. Select the generated `.vsix` file
+
+#### Development
 
 ```bash
 # Open in VS Code
 code .
 
 # Press F5 to launch Extension Development Host
+```
+
+### CLI (GitHub Packages)
+
+The CLI is published to GitHub Packages as `@vatsalsy/qcc-lsp`.
+GitHub Packages requires authentication even for public packages.
+
+```bash
+npm config set @vatsalsy:registry https://npm.pkg.github.com
+npm login --registry=https://npm.pkg.github.com --scope=@vatsalsy
+npm install -g @vatsalsy/qcc-lsp
+```
+
+Convenience script (from the repo root):
+
+```bash
+./install-cli.sh
+```
+
+Non-interactive installs (CI):
+
+```bash
+npm config set @vatsalsy:registry https://npm.pkg.github.com
+npm config set //npm.pkg.github.com/:_authToken=YOUR_GITHUB_TOKEN
+npm install -g @vatsalsy/qcc-lsp
 ```
 
 ### Other Editors
@@ -121,6 +167,12 @@ configs.basilisk = {
 }
 
 lspconfig.basilisk.setup{}
+```
+
+If you installed the CLI via GitHub Packages, the server entrypoint lives under:
+
+```
+<npm-global-root>/@vatsalsy/qcc-lsp/server/out/server.js
 ```
 
 **Emacs (with lsp-mode):**

@@ -193,9 +193,15 @@
     "watch": "concurrently \"cd server && npm run watch\" \"cd client && npm run watch\"",
     "lint": "eslint ./client/src ./server/src --ext .ts,.tsx",
     "postinstall": "cd client && npm install && cd ../server && npm install",
+    "prepublishOnly": "npm run compile",
+    "prepare:npm-package": "node scripts/prepare-npm-package.js",
+    "sync:npm-version": "node scripts/sync-npm-version.js",
     "test": "npm run test:server && npm run test:client",
     "test:server": "cd server && npm test",
-    "test:client": "cd client && npm test"
+    "test:client": "cd client && npm test",
+    "version:patch": "node scripts/bump-version.js patch",
+    "version:minor": "node scripts/bump-version.js minor",
+    "version:major": "node scripts/bump-version.js major"
   },
   "devDependencies": {
     "@types/node": "^20.10.0",

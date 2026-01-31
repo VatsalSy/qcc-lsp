@@ -1,0 +1,87 @@
+name: Release QCC LSP
+
+on:
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: 'Version bump type'
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+        default: patch
+      dry_run:
+        description: 'Compute version without tagging or pushing'
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Ensure main branch
+        run: |
+          if [ "${GITHUB_REF_NAME}" != "main" ]; then
+            echo "::error::Release must run from main branch"
+            exit 1
+          fi
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint and test
+        run: npm run lint && npm test
+
+      - name: Build extension
+        run: npm run compile
+
+      - name: Configure git identity
+        if: github.event.inputs.dry_run != 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Bump version
+        if: github.event.inputs.dry_run != 'true'
+        env:
+          BUMP: ${{ github.event.inputs.bump }}
+        run: |
+          node scripts/bump-version.js "$BUMP"
+
+      - name: Commit and tag
+        if: github.event.inputs.dry_run != 'true'
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          git add package.json package-lock.json packages/npm/package.json
+          git commit -m "Release v$VERSION"
+          git tag "v$VERSION"
+
+      - name: Push tag
+        if: github.event.inputs.dry_run != 'true'
+        run: git push --follow-tags
+
+      - name: Dry run summary
+        if: github.event.inputs.dry_run == 'true'
+        env:
+          BUMP: ${{ github.event.inputs.bump }}
+        run: |
+          CURRENT=$(node -p "require('./package.json').version")
+          NEXT=$(node -e "const v=process.argv[1].split('.').map(Number); const bump=process.argv[2]; if (v.length!==3) { process.exit(1); } let [maj,min,pat]=v; if (bump==='major') { maj+=1; min=0; pat=0; } else if (bump==='minor') { min+=1; pat=0; } else { pat+=1; } console.log([maj,min,pat].join('.'));" "$CURRENT" "$BUMP")
+          echo "### Dry Run Release" >> $GITHUB_STEP_SUMMARY
+          echo "Current version: $CURRENT" >> $GITHUB_STEP_SUMMARY
+          echo "Next version: $NEXT" >> $GITHUB_STEP_SUMMARY
+          echo "No tag or push performed." >> $GITHUB_STEP_SUMMARY
