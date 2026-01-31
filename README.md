@@ -4,7 +4,7 @@ Language Server Protocol (LSP) implementation for [Basilisk C](http://basilisk.f
 
 ## Overview
 
-This project provides a complete Language Server Protocol server for Basilisk C, enabling rich IDE features in any LSP-compatible editor (VS Code, Neovim, Emacs with lsp-mode, etc.).
+This project provides a complete Language Server Protocol server for Basilisk C, enabling rich IDE features in any LSP-compatible editor (VS Code, Neovim, Emacs with lsp-mode, etc.). It uses qcc as the primary compiler/diagnostic source and falls back to clangd only when qcc is unavailable (or disabled).
 
 Basilisk C extends C99 with domain-specific constructs for grid operations, field manipulation, and parallel computing. This LSP understands these extensions and provides intelligent assistance.
 
@@ -38,6 +38,7 @@ Basilisk C extends C99 with domain-specific constructs for grid operations, fiel
   - Integration with `qcc` compiler for full syntax checking
   - Quick validation for common mistakes
   - Configurable error limits
+  - clangd diagnostics fallback (when qcc is unavailable)
 
 - **Go-to-Definition** - Navigate to symbol definitions
 
@@ -68,6 +69,8 @@ Basilisk C extends C99 with domain-specific constructs for grid operations, fiel
 1. **Node.js** (v18 or later)
 2. **Basilisk** installation with `qcc` compiler
    - Follow installation at http://basilisk.fr/src/INSTALL
+3. **clangd** (optional, but recommended for deep C/C++ semantics)
+   - Install clangd via your system package manager or LLVM distribution.
 
 ### Building from Source
 
@@ -132,6 +135,13 @@ lspconfig.basilisk.setup{}
   :server-id 'basilisk-ls))
 ```
 
+### Warning about .c/.h association
+
+This extension associates `.c` and `.h` files with the Basilisk language by default. If you install this extension, you are opting into that behavior. To avoid conflicts with other C/C++ tooling:
+
+- Switch file associations back to `c`/`cpp` in your editor, or
+- Set `basilisk.clangd.mode` to `augment` and run a separate clangd extension/client for core C/C++ features.
+
 ## Configuration
 
 ### VS Code Settings
@@ -139,11 +149,19 @@ lspconfig.basilisk.setup{}
 | Setting | Type | Default | Description |
 |---------|------|---------|-------------|
 | `basilisk.qccPath` | string | `"qcc"` | Path to the qcc compiler |
+| `basilisk.qcc.includePaths` | string[] | `[]` | Additional include paths for qcc diagnostics (relative to workspace root) |
 | `basilisk.basiliskPath` | string | `""` | Path to Basilisk installation (BASILISK env var) |
 | `basilisk.enableDiagnostics` | boolean | `true` | Enable compilation diagnostics |
 | `basilisk.diagnosticsOnSave` | boolean | `true` | Run diagnostics on file save |
 | `basilisk.diagnosticsOnType` | boolean | `false` | Run diagnostics while typing |
 | `basilisk.maxNumberOfProblems` | number | `100` | Maximum problems reported per file |
+| `basilisk.clangd.enabled` | boolean | `true` | Enable clangd integration |
+| `basilisk.clangd.mode` | string | `"proxy"` | `proxy` uses clangd for core semantics; `augment` disables core providers so external clangd can be used; `disabled` turns off clangd |
+| `basilisk.clangd.path` | string | `"clangd"` | Path to clangd |
+| `basilisk.clangd.args` | string[] | `[]` | Extra clangd command-line args |
+| `basilisk.clangd.compileCommandsDir` | string | `""` | Directory containing compile_commands.json (defaults to BASILISK env or inferred qcc root when unset) |
+| `basilisk.clangd.fallbackFlags` | string[] | `[]` | Fallback compiler flags (BASILISK include paths are auto-added when available) |
+| `basilisk.clangd.diagnosticsMode` | string | `"filtered"` | clangd diagnostics: `all` (no filtering), `filtered` (suppress Basilisk DSL noise), `none` (disable clangd diagnostics) |
 | `basilisk.trace.server` | string | `"off"` | LSP trace level |
 
 Example `settings.json`:
@@ -152,9 +170,61 @@ Example `settings.json`:
 {
   "basilisk.qccPath": "/usr/local/bin/qcc",
   "basilisk.basiliskPath": "/home/user/basilisk/src",
-  "basilisk.enableDiagnostics": true
+  "basilisk.qcc.includePaths": ["src-local"],
+  "basilisk.enableDiagnostics": true,
+  "basilisk.clangd.enabled": true,
+  "basilisk.clangd.mode": "proxy"
 }
 ```
+
+### qcc include paths (automatic)
+
+For qcc diagnostics, the server automatically adds:
+
+- `-I <file-directory>` so local headers resolve, and
+- `-I <repo-root>/src-local` if a `src-local` directory is found while walking up from the file.
+
+This matches common Basilisk layouts where simulation cases live in `simulationCases/` and custom headers live in `src-local/`.
+
+If you keep headers elsewhere, add them via `basilisk.qcc.includePaths` (VS Code settings) or a `.comphy-basilisk` file (see below).
+
+### Optional project config: `.comphy-basilisk`
+
+If your project stores headers outside `$BASILISK/*` or `REPO_ROOT/src-local`, create a `.comphy-basilisk` file in your repo and list the extra include paths there.
+This file is optional; the server works without it. It is a JSON file with keys that mirror the VS Code settings.
+
+Example:
+
+```json
+{
+  "basiliskPath": "/Users/you/basilisk/src",
+  "qcc": {
+    "includePaths": [
+      "src-local",
+      "include",
+      "/absolute/path/to/other/headers"
+    ]
+  }
+}
+```
+
+Relative paths in `.comphy-basilisk` are resolved from the directory containing the file.
+
+Template: see `.comphy-basilisk.example` in the repo root.
+
+### clangd configuration (recommended)
+
+clangd works best with compile flags, but you do not need to create `compile_commands.json` just to use this server.
+
+Default behavior (policy B):
+
+- Uses the `BASILISK` environment variable (if set) to add Basilisk include paths.
+- If `BASILISK` is not set, it tries to infer the Basilisk root from `qcc` on your PATH.
+- If neither is available, clangd runs with its default checks.
+- clangd is only used as a fallback when qcc is unavailable (or disabled).
+- If clangd is enabled but not installed, the server reports an error when it needs to fall back.
+
+If you already have a `compile_commands.json`, set `basilisk.clangd.compileCommandsDir` to its directory. You can also add extra flags via `basilisk.clangd.fallbackFlags`.
 
 ## Usage
 
@@ -188,6 +258,59 @@ Type a prefix and press Tab to expand:
 - **Basilisk: Compile and Run** - Compile and execute
 - **Basilisk: Insert Event Block** - Interactive event insertion
 - **Basilisk: Insert Foreach Loop** - Interactive loop insertion
+
+### CLI diagnostics
+
+You can run diagnostics from the command line once the project is built:
+
+```bash
+# From the repo
+npm run compile
+node server/out/cli.js check path/to/file.c
+
+# If installed as a bin
+npm link
+qcc-lsp check path/to/file.c
+```
+
+Note: clangd runs only when qcc is unavailable.
+
+Health check:
+
+```bash
+qcc-lsp doctor
+```
+
+Common CLI flags:
+
+- `--qcc-include <dir>` (repeatable) add extra include paths
+- `--qcc-path <path>`
+- `--basilisk-path <path>`
+- `--project-config <path>` use a specific `.comphy-basilisk` file
+
+The CLI also reads `.comphy-basilisk` if present (searched upward from the file directory).
+Relative `--qcc-include` paths are resolved from the current working directory.
+
+Header-only checks:
+
+Some Basilisk headers are not valid translation units by themselves (they assume other core headers/macros or qcc preprocessing). For header diagnostics, wrap them in a temporary translation unit:
+
+```bash
+qcc-lsp check basilisk/src/compressible/two-phase.h --wrap-header --wrap-include "navier-stokes/centered.h"
+```
+
+If you omit `--wrap-include`, the CLI defaults to `#include "run.h"`, but some headers require more context.
+The wrapper is only applied to qcc diagnostics; clangd (when used) analyzes the original file contents.
+
+Common flags:
+
+- `--no-clangd` to skip clangd
+- `--qcc-path /path/to/qcc`
+- `--basilisk-path /path/to/basilisk/src`
+- `--compile-commands-dir /path/to/compile_commands`
+- `--fallback-flag "-I/path/to/include"` (repeatable)
+- `--clangd-diagnostics all|filtered|none`
+- `--json` for JSON output
 
 ## Basilisk C Language Reference
 
