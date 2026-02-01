@@ -9,3 +9,5 @@ out/
 dist/
 *.tsbuildinfo
 .DS_Store
+*.vsix
+!basilisk-lsp.vsix
