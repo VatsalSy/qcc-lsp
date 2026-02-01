@@ -47,6 +47,7 @@ import {
   getKeywordCategory,
   BUILTIN_FUNCTIONS
 } from './basiliskLanguage';
+import { ensureBasiliskDocs, getBasiliskDoc } from './basiliskDocs';
 
 import {
   runDiagnostics,
@@ -72,7 +73,7 @@ import {
   mergeFlags
 } from './clangdConfig';
 import { filterClangdDiagnostics } from './basiliskDetect';
-import { loadProjectConfig, ProjectConfig } from './projectConfig';
+import { loadProjectConfig, ProjectConfig, findSrcLocalDir } from './projectConfig';
 
 // Create connection and document manager
 const connection = createConnection(ProposedFeatures.all);
@@ -220,6 +221,7 @@ connection.onInitialized(async () => {
   }
 
   await refreshGlobalSettings();
+  await refreshBasiliskDocumentation(globalSettings);
   const qccAvailable = await checkQccAndLog(globalSettings);
   try {
     await ensureClangd(globalSettings, qccAvailable);
@@ -246,6 +248,7 @@ connection.onDidChangeConfiguration(async change => {
     globalSettings = resolveQccIncludePaths(merged, rootPath);
   }
 
+  await refreshBasiliskDocumentation(globalSettings);
   const qccAvailable = await checkQccAndLog(globalSettings);
   try {
     await ensureClangd(globalSettings, qccAvailable);
@@ -469,6 +472,67 @@ async function refreshGlobalSettings(): Promise<void> {
     const base = applyProjectConfig(defaultSettings, rootPath);
     globalSettings = resolveQccIncludePaths(base, rootPath);
   }
+}
+
+async function refreshBasiliskDocumentation(settings: BasiliskSettings): Promise<void> {
+  const rootPath = getWorkspaceRootPath();
+  let basiliskRoot = resolveBasiliskRoot(settings, rootPath);
+  if (!basiliskRoot && rootPath) {
+    basiliskRoot = path.join(rootPath, 'basilisk');
+  }
+  const docRoots = new Set<string>();
+  if (basiliskRoot) {
+    docRoots.add(basiliskRoot);
+  }
+
+  if (rootPath) {
+    const srcLocalDir = findSrcLocalDir(rootPath);
+    if (srcLocalDir) {
+      docRoots.add(srcLocalDir);
+    }
+  }
+
+  const includePaths = settings.qcc?.includePaths ?? [];
+  for (const includePath of includePaths) {
+    if (shouldIndexIncludePath(includePath, rootPath, basiliskRoot)) {
+      docRoots.add(includePath);
+    }
+  }
+
+  try {
+    await ensureBasiliskDocs([...docRoots]);
+  } catch (error) {
+    const message = `Basilisk docs indexing failed: ${(error as Error).message}`;
+    connection.console.warn(message);
+  }
+}
+
+function shouldIndexIncludePath(
+  includePath: string,
+  workspaceRoot: string | null,
+  basiliskRoot: string | null
+): boolean {
+  if (!includePath) {
+    return false;
+  }
+  if (path.basename(includePath) === 'src-local') {
+    return true;
+  }
+  if (workspaceRoot && isPathInside(includePath, workspaceRoot)) {
+    return true;
+  }
+  if (basiliskRoot && isPathInside(includePath, basiliskRoot)) {
+    return true;
+  }
+  return false;
+}
+
+function isPathInside(candidate: string, root: string): boolean {
+  const relative = path.relative(root, candidate);
+  if (relative === '') {
+    return true;
+  }
+  return !relative.startsWith('..') && !path.isAbsolute(relative);
 }
 
 async function checkQccAndLog(settings: BasiliskSettings): Promise<boolean> {
@@ -867,7 +931,7 @@ function buildBasiliskHover(document: TextDocument, params: HoverParams): Hover 
   }
 
   const { word } = symbolInfo;
-  const doc = getHoverDocumentation(word);
+  const doc = getHoverDocumentation(word) ?? getBasiliskDoc(word)?.markdown;
   if (doc) {
     return {
       contents: {
@@ -992,7 +1056,7 @@ connection.onCompletionResolve(async (item: CompletionItem): Promise<CompletionI
     }
   }
 
-  const doc = getHoverDocumentation(resolved.label);
+  const doc = getHoverDocumentation(resolved.label) ?? getBasiliskDoc(resolved.label)?.markdown;
   if (doc && !resolved.documentation) {
     resolved.documentation = {
       kind: 'markdown',
