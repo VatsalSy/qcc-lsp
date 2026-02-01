@@ -902,35 +902,58 @@ function mergeHovers(primary: Hover | null, secondary: Hover | null): Hover | nu
     return secondary;
   }
 
-  const primaryContents = primary?.contents;
-  const secondaryContents = secondary?.contents;
-  const combined: Hover = {
-    contents: []
-  };
+  const primaryMarkdown = hoverContentsToMarkdown(primary?.contents);
+  const secondaryMarkdown = hoverContentsToMarkdown(secondary?.contents);
+  const markdownParts = [primaryMarkdown, secondaryMarkdown].filter(Boolean);
+  const combinedMarkdown = markdownParts.join('\n\n---\n\n');
 
-  const pushContent = (content: Hover['contents'] | undefined) => {
-    if (!content) {
-      return;
-    }
-    if (Array.isArray(content)) {
-      (combined.contents as typeof content).push(...content);
-      return;
-    }
-    (combined.contents as typeof content[]).push(content);
-  };
-
-  pushContent(primaryContents);
-  if (secondaryContents) {
-    const separator = { kind: MarkupKind.Markdown, value: '\n---\n' };
-    pushContent(separator);
-    pushContent(secondaryContents);
+  if (!combinedMarkdown) {
+    return primary ?? secondary;
   }
 
-  if (primary?.range) {
-    combined.range = primary.range;
+  return {
+    contents: {
+      kind: MarkupKind.Markdown,
+      value: combinedMarkdown
+    },
+    range: primary?.range ?? secondary?.range
+  };
+}
+
+type HoverContent = Hover['contents'];
+type HoverContentItem = HoverContent extends (infer Item)[] ? Item : HoverContent;
+
+function hoverContentsToMarkdown(contents: HoverContent | undefined): string {
+  if (!contents) {
+    return '';
   }
 
-  return combined;
+  if (Array.isArray(contents)) {
+    return contents
+      .map(markedStringToMarkdown)
+      .filter((value) => value.length > 0)
+      .join('\n\n');
+  }
+
+  return markedStringToMarkdown(contents);
+}
+
+function markedStringToMarkdown(content: HoverContentItem): string {
+  if (typeof content === 'string') {
+    return content;
+  }
+
+  if ('kind' in content) {
+    return content.value;
+  }
+
+  const language = content.language || '';
+  const value = content.value || '';
+  if (!value) {
+    return '';
+  }
+  const languageLabel = language ? language : '';
+  return `\`\`\`${languageLabel}\n${value}\n\`\`\``;
 }
 
 /**
