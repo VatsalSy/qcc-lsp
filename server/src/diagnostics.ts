@@ -17,6 +17,7 @@ import {
   Position
 } from 'vscode-languageserver';
 import { findSrcLocalDir } from './projectConfig';
+import { resolveExecutableOnPath } from './pathUtils';
 
 export interface QccSettings {
   includePaths: string[];
@@ -162,37 +163,6 @@ function toSeverity(severity: 'error' | 'warning' | 'note'): DiagnosticSeverity 
   }
 }
 
-function resolveExecutableOnPath(command: string): string | null {
-  if (!command) {
-    return null;
-  }
-  const expanded = command.startsWith('~')
-    ? path.join(os.homedir(), command.slice(1))
-    : command;
-  if (path.isAbsolute(expanded)) {
-    return fs.existsSync(expanded) ? expanded : null;
-  }
-
-  const pathEnv = process.env.PATH || '';
-  const pathDirs = pathEnv.split(path.delimiter).filter(Boolean);
-  const isWindows = process.platform === 'win32';
-  const hasExt = path.extname(expanded).length > 0;
-  const extensions = isWindows
-    ? (process.env.PATHEXT || '.EXE;.CMD;.BAT;.COM').split(';')
-    : [''];
-
-  for (const dir of pathDirs) {
-    for (const ext of extensions) {
-      const candidate = hasExt ? expanded : `${expanded}${ext}`;
-      const fullPath = path.join(dir, candidate);
-      if (fs.existsSync(fullPath)) {
-        return fullPath;
-      }
-    }
-  }
-
-  return null;
-}
 
 function resolveQccCandidates(settings: DiagnosticsSettings): string[] {
   const candidates: string[] = [];
@@ -223,9 +193,12 @@ function resolveQccCandidates(settings: DiagnosticsSettings): string[] {
 
 export function resolveQccPath(settings: DiagnosticsSettings): string | null {
   for (const candidate of resolveQccCandidates(settings)) {
-    const resolved = resolveExecutableOnPath(candidate) || (path.isAbsolute(candidate) ? candidate : null);
-    if (resolved && fs.existsSync(resolved)) {
+    const resolved = resolveExecutableOnPath(candidate);
+    if (resolved) {
       return resolved;
+    }
+    if (path.isAbsolute(candidate) && fs.existsSync(candidate)) {
+      return candidate;
     }
   }
   return null;

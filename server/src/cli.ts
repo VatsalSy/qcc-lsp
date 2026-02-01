@@ -22,9 +22,9 @@ import {
   deriveBasiliskFallbackFlags,
   mergeFlags,
   resolveBasiliskRoot,
-  resolvePathSetting,
-  resolveExecutableOnPath
+  resolvePathSetting
 } from './clangdConfig';
+import { resolveExecutableOnPath } from './pathUtils';
 import { filterClangdDiagnostics } from './basiliskDetect';
 
 type OutputFormat = 'text' | 'json';

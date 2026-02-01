@@ -24,7 +24,7 @@
     "lsp"
   ],
   "engines": {
-    "vscode": "^1.75.0"
+    "vscode": "^1.108.2"
   },
   "activationEvents": [
     "onLanguage:basilisk"
@@ -203,18 +203,12 @@
     "version:minor": "node scripts/bump-version.js minor",
     "version:major": "node scripts/bump-version.js major"
   },
-  "dependencies": {
-    "vscode-languageclient": "^9.0.1",
-    "vscode-languageserver": "^9.0.1",
-    "vscode-languageserver-textdocument": "^1.0.11",
-    "vscode-uri": "^3.0.8"
-  },
   "devDependencies": {
-    "@types/node": "^20.10.0",
+    "@types/node": "^25.2.0",
     "@typescript-eslint/eslint-plugin": "^8.54.0",
     "@typescript-eslint/parser": "^8.54.0",
-    "concurrently": "^8.2.2",
+    "concurrently": "^9.2.1",
     "eslint": "^9.39.2",
-    "typescript": "^5.3.2"
+    "typescript": "^5.9.3"
   }
 }

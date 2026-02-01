@@ -24,25 +24,31 @@ export async function ensureBasiliskDocs(roots: string[]): Promise<void> {
   }
 
   const nextKey = JSON.stringify(docRoots);
-  if (docRootKey === nextKey && docIndex.size > 0) {
+  while (true) {
+    if (docRootKey === nextKey && docIndex.size > 0) {
+      return;
+    }
+
+    const existing = loading;
+    if (existing) {
+      await existing;
+      continue;
+    }
+
+    loading = (async () => {
+      const roots = docRoots;
+      const key = nextKey;
+      const nextIndex = await buildDocIndex(roots);
+      docIndex = nextIndex;
+      docRootKey = key;
+    })();
+
+    try {
+      await loading;
+    } finally {
+      loading = null;
+    }
     return;
-  }
-
-  if (loading) {
-    await loading;
-    return;
-  }
-
-  loading = (async () => {
-    const nextIndex = await buildDocIndex(docRoots);
-    docIndex = nextIndex;
-    docRootKey = nextKey;
-  })();
-
-  try {
-    await loading;
-  } finally {
-    loading = null;
   }
 }
 
@@ -325,7 +331,7 @@ function parseGlobalsFromFile(content: string, filePath: string): BasiliskDocEnt
       continue;
     }
 
-    const match = /^\s*(?:static\s+)?(?:const\s+)?(double|int|float|char|long|short|unsigned|size_t|bool)\s+([^;]+);/.exec(line);
+    const match = /^\s*(?:static\s+)?((?:(?:const|volatile|[A-Za-z_]\w*)\s+)*(?:const|volatile|[A-Za-z_]\w*)(?:\s*\*+\s*)*)\s*([^;]+);/.exec(line);
     if (!match) {
       continue;
     }
