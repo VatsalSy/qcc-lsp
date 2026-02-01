@@ -891,19 +891,45 @@ function buildBasiliskHover(document: TextDocument, params: HoverParams): Hover 
   return null;
 }
 
+type HoverContent = Hover['contents'] extends (infer T)[] ? T : Hover['contents'];
+
+function hoverContentHasValue(content: HoverContent): boolean {
+  if (typeof content === 'string') {
+    return content.trim().length > 0;
+  }
+  if (content && typeof content === 'object' && 'value' in content) {
+    return typeof content.value === 'string' && content.value.trim().length > 0;
+  }
+  return false;
+}
+
+function hoverHasContent(hover: Hover | null): hover is Hover {
+  if (!hover) {
+    return false;
+  }
+  const contents = hover.contents;
+  if (Array.isArray(contents)) {
+    return contents.some(hoverContentHasValue);
+  }
+  return hoverContentHasValue(contents);
+}
+
 function mergeHovers(primary: Hover | null, secondary: Hover | null): Hover | null {
-  if (!primary && !secondary) {
+  const effectivePrimary = hoverHasContent(primary) ? primary : null;
+  const effectiveSecondary = hoverHasContent(secondary) ? secondary : null;
+
+  if (!effectivePrimary && !effectiveSecondary) {
     return null;
   }
-  if (primary && !secondary) {
-    return primary;
+  if (effectivePrimary && !effectiveSecondary) {
+    return effectivePrimary;
   }
-  if (!primary && secondary) {
-    return secondary;
+  if (!effectivePrimary && effectiveSecondary) {
+    return effectiveSecondary;
   }
 
-  const primaryContents = primary?.contents;
-  const secondaryContents = secondary?.contents;
+  const primaryContents = effectivePrimary?.contents;
+  const secondaryContents = effectiveSecondary?.contents;
   const combined: Hover = {
     contents: []
   };
@@ -926,8 +952,8 @@ function mergeHovers(primary: Hover | null, secondary: Hover | null): Hover | nu
     pushContent(secondaryContents);
   }
 
-  if (primary?.range) {
-    combined.range = primary.range;
+  if (effectivePrimary?.range) {
+    combined.range = effectivePrimary.range;
   }
 
   return combined;
