@@ -54,7 +54,8 @@ import {
   BasiliskSettings,
   BasiliskSettingsInput,
   defaultSettings,
-  checkQccAvailable
+  checkQccAvailable,
+  resolveQccPath
 } from './diagnostics';
 
 import {
@@ -162,7 +163,11 @@ connection.onInitialize((params: InitializeParams): InitializeResult => {
 
   const result: InitializeResult = {
     capabilities: {
-      textDocumentSync: TextDocumentSyncKind.Incremental,
+      textDocumentSync: {
+        openClose: true,
+        change: TextDocumentSyncKind.Incremental,
+        save: { includeText: false }
+      },
 
       // Completion
       completionProvider: {
@@ -467,7 +472,8 @@ async function refreshGlobalSettings(): Promise<void> {
 }
 
 async function checkQccAndLog(settings: BasiliskSettings): Promise<boolean> {
-  const qccAvailable = await checkQccAvailable(settings.qccPath);
+  const resolvedQccPath = resolveQccPath(settings);
+  const qccAvailable = resolvedQccPath ? await checkQccAvailable(resolvedQccPath) : false;
   if (!settings.enableDiagnostics) {
     return qccAvailable;
   }
@@ -478,7 +484,8 @@ async function checkQccAndLog(settings: BasiliskSettings): Promise<boolean> {
       'Diagnostics will be limited. Set basilisk.qccPath in settings.'
     );
   } else {
-    connection.console.log('Basilisk LSP server initialized with qcc support');
+    const label = resolvedQccPath || settings.qccPath;
+    connection.console.log(`Basilisk LSP server initialized with qcc support (${label})`);
   }
   return qccAvailable;
 }
@@ -644,7 +651,9 @@ async function collectLocalDiagnostics(
 
   const runQcc =
     settings.enableDiagnostics &&
-    ((trigger === 'change' && runOnType) || (trigger === 'save' && runOnSave));
+    ((trigger === 'change' && runOnType) ||
+      (trigger === 'save' && runOnSave) ||
+      (trigger === 'open' && runOnSave));
 
   if (runQcc) {
     try {
@@ -880,10 +889,20 @@ function buildBasiliskHover(document: TextDocument, params: HoverParams): Hover 
 
   const symbol = symbolIndex.findDefinition(word);
   if (symbol) {
+    const sections: string[] = [];
+    if (symbol.documentation) {
+      sections.push(symbol.documentation.trim());
+    }
+    if (symbol.detail) {
+      sections.push(`\`\`\`c\n${symbol.detail}\n\`\`\``);
+    }
+    if (sections.length === 0) {
+      sections.push(`**${symbol.name}**`);
+    }
     return {
       contents: {
         kind: 'markdown',
-        value: `**${symbol.name}**\n\n${symbol.detail || ''}`
+        value: sections.join('\n\n')
       }
     };
   }

@@ -12,6 +12,7 @@ import {
   BasiliskSettingsInput,
   defaultSettings,
   checkQccAvailable,
+  resolveQccPath,
   runDiagnostics,
   quickValidate
 } from './diagnostics';
@@ -645,8 +646,8 @@ async function runDoctor(options: BaseOptions): Promise<void> {
   }
   const cwd = process.cwd();
 
-  const qccResolved = resolveExecutableOnPath(settings.qccPath) || settings.qccPath;
-  const qccAvailable = await checkQccAvailable(settings.qccPath);
+  const qccResolved = resolveQccPath(settings) || settings.qccPath;
+  const qccAvailable = qccResolved ? await checkQccAvailable(qccResolved) : false;
 
   const clangdResolved = settings.clangd.enabled
     ? resolveExecutableOnPath(settings.clangd.path) || settings.clangd.path
@@ -700,7 +701,8 @@ async function run(): Promise<void> {
   const diagnostics: Diagnostic[] = [];
   diagnostics.push(...quickValidate(originalContent));
 
-  const qccAvailable = await checkQccAvailable(settings.qccPath);
+  const qccResolved = resolveQccPath(settings);
+  const qccAvailable = qccResolved ? await checkQccAvailable(qccResolved) : false;
 
   if (settings.enableDiagnostics) {
     const qccDiagnostics = await runDiagnostics(uri, qccContent, settings, {
