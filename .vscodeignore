@@ -12,3 +12,5 @@ out/**
 *.vsix
 !client/out/**
 !server/out/**
+!client/node_modules/**
+!server/node_modules/**

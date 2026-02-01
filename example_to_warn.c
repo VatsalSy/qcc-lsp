@@ -100,7 +100,7 @@ The initial conditions are a perturbed cylinder with a relatively
 large amplitude of deformation (10%). */
   
 event init (t = 0) {
-  double k = pi, R = 0.2;
+  duble k = pi, R = 0.2;
   frction (f, R*(1. + 0.1*sin(k*x)) - y); // simulated error: this should be fraction
 }
 
@@ -123,7 +123,7 @@ event logfile (i += 5)
 /**
 We generate interface profiles and an animation. */
 
-const double tpinch = 0.75626;
+const doble tpinch = 0.75626;
 
 event profiles (t = {0.2, 0.6, tpinch, 0.8})
 {
