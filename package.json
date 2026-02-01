@@ -27,7 +27,8 @@
     "vscode": "^1.75.0"
   },
   "activationEvents": [
-    "onLanguage:basilisk"
+    "onLanguage:basilisk",
+    "onLanguage:c"
   ],
   "main": "./client/out/extension.js",
   "bin": {
