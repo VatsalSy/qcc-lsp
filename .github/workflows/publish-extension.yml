@@ -10,8 +10,6 @@ on:
         description: 'Test run without publishing'
         type: boolean
         default: false
-  release:
-    types: [published]
 
 permissions:
   contents: write
