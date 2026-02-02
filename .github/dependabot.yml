@@ -9,15 +9,51 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
+    groups:
+      typescript-tooling:
+        patterns:
+          - "typescript"
+          - "@types/*"
+      lsp-packages:
+        patterns:
+          - "vscode-languageserver*"
+          - "vscode-languageclient"
   - package-ecosystem: "npm"
     directory: "/client"
     schedule:
       interval: "weekly"
+    groups:
+      typescript-tooling:
+        patterns:
+          - "typescript"
+          - "@types/*"
+      lsp-packages:
+        patterns:
+          - "vscode-languageserver*"
+          - "vscode-languageclient"
   - package-ecosystem: "npm"
     directory: "/server"
     schedule:
       interval: "weekly"
+    groups:
+      typescript-tooling:
+        patterns:
+          - "typescript"
+          - "@types/*"
+      lsp-packages:
+        patterns:
+          - "vscode-languageserver*"
+          - "vscode-languageclient"
   - package-ecosystem: "npm"
     directory: "/packages/npm"
     schedule:
       interval: "weekly"
+    groups:
+      typescript-tooling:
+        patterns:
+          - "typescript"
+          - "@types/*"
+      lsp-packages:
+        patterns:
+          - "vscode-languageserver*"
+          - "vscode-languageclient"
