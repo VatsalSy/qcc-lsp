@@ -209,7 +209,7 @@ async function collectSourceFiles(roots: string[]): Promise<string[]> {
   return files;
 }
 
-function parseDocsFromFile(content: string, filePath: string): BasiliskDocEntry[] {
+export function parseDocsFromFile(content: string, filePath: string): BasiliskDocEntry[] {
   const entries: BasiliskDocEntry[] = [];
   const lines = content.split(/\r?\n/);
 
@@ -257,7 +257,7 @@ function parseDocsFromFile(content: string, filePath: string): BasiliskDocEntry[
   return entries;
 }
 
-function parseGlobalsFromFile(content: string, filePath: string): BasiliskDocEntry[] {
+export function parseGlobalsFromFile(content: string, filePath: string): BasiliskDocEntry[] {
   const entries: BasiliskDocEntry[] = [];
   const lines = content.split(/\r?\n/);
 
@@ -331,7 +331,7 @@ function parseGlobalsFromFile(content: string, filePath: string): BasiliskDocEnt
       continue;
     }
 
-    const match = /^\s*(?:static\s+)?((?:(?:const|volatile|[A-Za-z_]\w*)\s+)*(?:const|volatile|[A-Za-z_]\w*)(?:\s*\*+\s*)*)\s*([^;]+);/.exec(line);
+    const match = /^\s*(?:static\s+)?(?:const\s+)?(double|int|float|char|long|short|unsigned|size_t|bool)\s+([^;]+);/.exec(line);
     if (!match) {
       continue;
     }
@@ -361,7 +361,7 @@ function parseGlobalsFromFile(content: string, filePath: string): BasiliskDocEnt
   return entries;
 }
 
-function cleanDocComment(lines: string[]): string {
+export function cleanDocComment(lines: string[]): string {
   const cleaned = lines.map((line, index) => {
     let value = line;
     if (index === 0) {
@@ -408,7 +408,7 @@ function findDocCommentAbove(lines: string[], lineIndex: number): string | null 
   return doc.length > 0 ? doc : null;
 }
 
-function splitTopLevelCommas(input: string): string[] {
+export function splitTopLevelCommas(input: string): string[] {
   const parts: string[] = [];
   let current = '';
   let paren = 0;
@@ -470,7 +470,7 @@ function splitTopLevelCommas(input: string): string[] {
   return parts;
 }
 
-function parseDeclaration(part: string): { name: string; suffix: string } | null {
+export function parseDeclaration(part: string): { name: string; suffix: string } | null {
   const assignmentIndex = part.indexOf('=');
   const declarator = assignmentIndex >= 0 ? part.slice(0, assignmentIndex) : part;
   const trimmed = declarator.trim();
@@ -493,12 +493,12 @@ function parseDeclaration(part: string): { name: string; suffix: string } | null
   return { name, suffix };
 }
 
-interface SignatureInfo {
+export interface SignatureInfo {
   name: string;
   signature: string;
 }
 
-function findSignatureAfter(lines: string[], startIndex: number): SignatureInfo | null {
+export function findSignatureAfter(lines: string[], startIndex: number): SignatureInfo | null {
   let collected = '';
   let linesChecked = 0;
 
@@ -586,12 +586,12 @@ function findSignatureAfter(lines: string[], startIndex: number): SignatureInfo 
   };
 }
 
-function isModifierLine(line: string): boolean {
+export function isModifierLine(line: string): boolean {
   const trimmed = line.trim();
   return trimmed === 'trace' || trimmed === 'static' || trimmed === 'inline' || trimmed === 'extern' || trimmed === 'const';
 }
 
-function formatDoc(signature: string, docText: string, name: string): string {
+export function formatDoc(signature: string, docText: string, name: string): string {
   if (!docText) {
     return `**${signature}**`;
   }
