@@ -9,5 +9,6 @@ out/
 dist/
 *.tsbuildinfo
 .DS_Store
+**/.comphy-basilisk
 *.vsix
 !basilisk-lsp.vsix
