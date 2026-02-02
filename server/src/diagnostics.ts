@@ -197,9 +197,6 @@ export function resolveQccPath(settings: DiagnosticsSettings): string | null {
     if (resolved) {
       return resolved;
     }
-    if (path.isAbsolute(candidate) && fs.existsSync(candidate)) {
-      return candidate;
-    }
   }
   return null;
 }
