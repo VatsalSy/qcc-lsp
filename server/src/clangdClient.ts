@@ -1,3 +1,10 @@
+/**
+ * clangd LSP Client
+ *
+ * Manages a clangd subprocess for C/C++ language features, forwarding
+ * LSP requests and handling diagnostics.
+ */
+
 import { spawn, ChildProcessWithoutNullStreams } from 'child_process';
 import { Diagnostic, InitializeParams, InitializeResult } from 'vscode-languageserver/node';
 

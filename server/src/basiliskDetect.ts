@@ -1,3 +1,10 @@
+/**
+ * Basilisk Code Detection and Diagnostic Filtering
+ *
+ * Detects Basilisk DSL constructs and filters clangd diagnostics
+ * to suppress noise from Basilisk-specific syntax.
+ */
+
 import { Diagnostic } from 'vscode-languageserver/node';
 import {
   CONTROL_KEYWORDS,
@@ -24,6 +31,12 @@ const NOISE_PATTERNS = [
   /use of undeclared identifier/i
 ];
 
+/**
+ * Checks if text contains Basilisk-specific constructs.
+ *
+ * @param text - Source code text to check
+ * @returns True if Basilisk keywords or includes are found
+ */
 export function isLikelyBasiliskText(text: string): boolean {
   return BASILISK_TOKEN_REGEX.test(text) || BASILISK_INCLUDE_REGEX.test(text);
 }
@@ -32,6 +45,15 @@ function lineLikelyBasilisk(line: string): boolean {
   return BASILISK_TOKEN_REGEX.test(line) || BASILISK_INCLUDE_REGEX.test(line);
 }
 
+/**
+ * Filters clangd diagnostics to suppress noise from Basilisk DSL constructs.
+ *
+ * Removes diagnostics for lines with Basilisk syntax if they match known noise patterns.
+ *
+ * @param diagnostics - Array of diagnostics from clangd
+ * @param text - Full source text for context
+ * @returns Filtered diagnostics array
+ */
 export function filterClangdDiagnostics(
   diagnostics: Diagnostic[],
   text: string

@@ -1,3 +1,10 @@
+/**
+ * Basilisk Documentation Indexer
+ *
+ * Extracts and indexes documentation comments from Basilisk C source files
+ * for use in hover and completion information.
+ */
+
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -15,6 +22,13 @@ let docRootKey: string | null = null;
 let docIndex: Map<string, BasiliskDocEntry> = new Map();
 let loading: Promise<void> | null = null;
 
+/**
+ * Ensures documentation is indexed for the given roots.
+ *
+ * Rebuilds the index if roots have changed. Handles concurrent calls safely.
+ *
+ * @param roots - Array of directory paths to index for documentation
+ */
 export async function ensureBasiliskDocs(roots: string[]): Promise<void> {
   const docRoots = resolveDocRoots(roots);
   if (docRoots.length === 0) {
@@ -52,6 +66,12 @@ export async function ensureBasiliskDocs(roots: string[]): Promise<void> {
   }
 }
 
+/**
+ * Retrieves documentation for a symbol from the index.
+ *
+ * @param symbol - Symbol name to look up
+ * @returns Documentation entry if found, undefined otherwise
+ */
 export function getBasiliskDoc(symbol: string): BasiliskDocEntry | undefined {
   return docIndex.get(symbol);
 }

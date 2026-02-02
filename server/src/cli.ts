@@ -1,3 +1,10 @@
+/**
+ * qcc-lsp CLI Entrypoint
+ *
+ * Command-line interface for running Basilisk C diagnostics with qcc and clangd.
+ * Supports `check <file>` for diagnostics and `doctor` for environment checks.
+ */
+
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';

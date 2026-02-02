@@ -18,7 +18,12 @@ import {
 let client: LanguageClient;
 
 /**
- * Validate and sanitize executable path to prevent command injection
+ * Validates and sanitizes executable path to prevent command injection.
+ *
+ * Rejects paths containing shell metacharacters or directory traversal attempts.
+ *
+ * @param execPath - Path string to validate
+ * @returns True if path is safe to use, false otherwise
  */
 function isValidExecutablePath(execPath: string): boolean {
   // Reject paths with shell metacharacters and traversal attempts
@@ -36,7 +41,12 @@ function isValidExecutablePath(execPath: string): boolean {
 }
 
 /**
- * Resolve executable path to absolute path if possible
+ * Resolves executable path to absolute form if already absolute.
+ *
+ * Relative paths are returned unchanged and will be resolved via shell PATH.
+ *
+ * @param execPath - Path to resolve
+ * @returns Absolute path if already absolute, otherwise original path
  */
 function resolveExecutablePath(execPath: string): string {
   // If already absolute, return as-is
@@ -48,6 +58,13 @@ function resolveExecutablePath(execPath: string): string {
   return execPath;
 }
 
+/**
+ * Activates the Basilisk C Language Server extension.
+ *
+ * Starts the language server, registers commands, and configures client options.
+ *
+ * @param context - VS Code extension context
+ */
 export function activate(context: vscode.ExtensionContext) {
   // Path to the server module
   const serverModule = context.asAbsolutePath(
@@ -112,6 +129,11 @@ export function activate(context: vscode.ExtensionContext) {
   vscode.window.setStatusBarMessage('Basilisk LSP started', 3000);
 }
 
+/**
+ * Deactivates the extension and stops the language server.
+ *
+ * @returns Promise that resolves when the server stops, or undefined if no client
+ */
 export function deactivate(): Thenable<void> | undefined {
   if (!client) {
     return undefined;
@@ -120,7 +142,11 @@ export function deactivate(): Thenable<void> | undefined {
 }
 
 /**
- * Register extension commands
+ * Registers VS Code commands for Basilisk C operations.
+ *
+ * Registers compile, compile-and-run, insert-event, insert-foreach, and documentation commands.
+ *
+ * @param context - VS Code extension context for subscriptions
  */
 function registerCommands(context: vscode.ExtensionContext) {
   // Compile current file

@@ -1,3 +1,9 @@
+/**
+ * Project Configuration Loader
+ *
+ * Loads and parses .comphy-basilisk project configuration files.
+ */
+
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
@@ -64,6 +70,12 @@ function isDirectory(dirPath: string): boolean {
   }
 }
 
+/**
+ * Finds the repository root by searching upward for .git directory.
+ *
+ * @param startDir - Directory to start searching from
+ * @returns Path to repository root, or null if not found
+ */
 export function findRepoRoot(startDir: string): string | null {
   let current = startDir;
   while (true) {
@@ -80,6 +92,12 @@ export function findRepoRoot(startDir: string): string | null {
   return null;
 }
 
+/**
+ * Finds the src-local directory by searching upward from startDir to repo root.
+ *
+ * @param startDir - Directory to start searching from
+ * @returns Path to src-local directory, or null if not found
+ */
 export function findSrcLocalDir(startDir: string): string | null {
   const repoRoot = findRepoRoot(startDir);
   let current = startDir;
@@ -120,6 +138,13 @@ function findConfigPath(startDir: string, fileName: string): string | null {
   return null;
 }
 
+/**
+ * Loads project configuration by searching upward from startDir.
+ *
+ * @param startDir - Directory to start searching from
+ * @param fileName - Config file name (default: .comphy-basilisk)
+ * @returns Result with path, config object, and optional error
+ */
 export function loadProjectConfig(startDir: string, fileName = '.comphy-basilisk'): ProjectConfigResult {
   const configPath = findConfigPath(startDir, fileName);
   if (!configPath) {
@@ -144,6 +169,12 @@ export function loadProjectConfig(startDir: string, fileName = '.comphy-basilisk
   }
 }
 
+/**
+ * Loads project configuration from an explicit file path.
+ *
+ * @param filePath - Path to config file (supports ~ and relative paths)
+ * @returns Result with path, config object, and optional error
+ */
 export function loadProjectConfigFromFile(filePath: string): ProjectConfigResult {
   const resolvedPath = resolveConfigPath(filePath);
   if (!fs.existsSync(resolvedPath)) {
@@ -172,6 +203,13 @@ export function loadProjectConfigFromFile(filePath: string): ProjectConfigResult
   }
 }
 
+/**
+ * Resolves relative paths in project configuration against baseDir.
+ *
+ * @param config - Project configuration with potentially relative paths
+ * @param baseDir - Base directory for path resolution
+ * @returns Configuration with resolved absolute paths
+ */
 export function resolveProjectConfig(config: ProjectConfig, baseDir: string): ProjectConfig {
   const resolved: ProjectConfig = { ...config };
 
