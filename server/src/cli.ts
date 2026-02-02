@@ -1,3 +1,10 @@
+/**
+ * qcc-lsp CLI Entrypoint
+ *
+ * Command-line interface for running Basilisk C diagnostics with qcc and clangd.
+ * Supports `check <file>` for diagnostics and `doctor` for environment checks.
+ */
+
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
@@ -12,6 +19,7 @@ import {
   BasiliskSettingsInput,
   defaultSettings,
   checkQccAvailable,
+  resolveQccPath,
   runDiagnostics,
   quickValidate
 } from './diagnostics';
@@ -21,9 +29,9 @@ import {
   deriveBasiliskFallbackFlags,
   mergeFlags,
   resolveBasiliskRoot,
-  resolvePathSetting,
-  resolveExecutableOnPath
+  resolvePathSetting
 } from './clangdConfig';
+import { resolveExecutableOnPath } from './pathUtils';
 import { filterClangdDiagnostics } from './basiliskDetect';
 
 type OutputFormat = 'text' | 'json';
@@ -645,8 +653,8 @@ async function runDoctor(options: BaseOptions): Promise<void> {
   }
   const cwd = process.cwd();
 
-  const qccResolved = resolveExecutableOnPath(settings.qccPath) || settings.qccPath;
-  const qccAvailable = await checkQccAvailable(settings.qccPath);
+  const qccResolved = resolveQccPath(settings) || settings.qccPath;
+  const qccAvailable = qccResolved ? await checkQccAvailable(qccResolved) : false;
 
   const clangdResolved = settings.clangd.enabled
     ? resolveExecutableOnPath(settings.clangd.path) || settings.clangd.path
@@ -700,7 +708,8 @@ async function run(): Promise<void> {
   const diagnostics: Diagnostic[] = [];
   diagnostics.push(...quickValidate(originalContent));
 
-  const qccAvailable = await checkQccAvailable(settings.qccPath);
+  const qccResolved = resolveQccPath(settings);
+  const qccAvailable = qccResolved ? await checkQccAvailable(qccResolved) : false;
 
   if (settings.enableDiagnostics) {
     const qccDiagnostics = await runDiagnostics(uri, qccContent, settings, {

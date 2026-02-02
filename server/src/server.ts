@@ -47,6 +47,7 @@ import {
   getKeywordCategory,
   BUILTIN_FUNCTIONS
 } from './basiliskLanguage';
+import { ensureBasiliskDocs, getBasiliskDoc } from './basiliskDocs';
 
 import {
   runDiagnostics,
@@ -54,7 +55,8 @@ import {
   BasiliskSettings,
   BasiliskSettingsInput,
   defaultSettings,
-  checkQccAvailable
+  checkQccAvailable,
+  resolveQccPath
 } from './diagnostics';
 
 import {
@@ -71,7 +73,7 @@ import {
   mergeFlags
 } from './clangdConfig';
 import { filterClangdDiagnostics } from './basiliskDetect';
-import { loadProjectConfig, ProjectConfig } from './projectConfig';
+import { loadProjectConfig, ProjectConfig, findSrcLocalDir } from './projectConfig';
 
 // Create connection and document manager
 const connection = createConnection(ProposedFeatures.all);
@@ -162,7 +164,11 @@ connection.onInitialize((params: InitializeParams): InitializeResult => {
 
   const result: InitializeResult = {
     capabilities: {
-      textDocumentSync: TextDocumentSyncKind.Incremental,
+      textDocumentSync: {
+        openClose: true,
+        change: TextDocumentSyncKind.Incremental,
+        save: { includeText: false }
+      },
 
       // Completion
       completionProvider: {
@@ -215,6 +221,7 @@ connection.onInitialized(async () => {
   }
 
   await refreshGlobalSettings();
+  await refreshBasiliskDocumentation(globalSettings);
   const qccAvailable = await checkQccAndLog(globalSettings);
   try {
     await ensureClangd(globalSettings, qccAvailable);
@@ -241,6 +248,7 @@ connection.onDidChangeConfiguration(async change => {
     globalSettings = resolveQccIncludePaths(merged, rootPath);
   }
 
+  await refreshBasiliskDocumentation(globalSettings);
   const qccAvailable = await checkQccAndLog(globalSettings);
   try {
     await ensureClangd(globalSettings, qccAvailable);
@@ -466,8 +474,70 @@ async function refreshGlobalSettings(): Promise<void> {
   }
 }
 
+async function refreshBasiliskDocumentation(settings: BasiliskSettings): Promise<void> {
+  const rootPath = getWorkspaceRootPath();
+  let basiliskRoot = resolveBasiliskRoot(settings, rootPath);
+  if (!basiliskRoot && rootPath) {
+    basiliskRoot = path.join(rootPath, 'basilisk');
+  }
+  const docRoots = new Set<string>();
+  if (basiliskRoot) {
+    docRoots.add(basiliskRoot);
+  }
+
+  if (rootPath) {
+    const srcLocalDir = findSrcLocalDir(rootPath);
+    if (srcLocalDir) {
+      docRoots.add(srcLocalDir);
+    }
+  }
+
+  const includePaths = settings.qcc?.includePaths ?? [];
+  for (const includePath of includePaths) {
+    if (shouldIndexIncludePath(includePath, rootPath, basiliskRoot)) {
+      docRoots.add(includePath);
+    }
+  }
+
+  try {
+    await ensureBasiliskDocs([...docRoots]);
+  } catch (error) {
+    const message = `Basilisk docs indexing failed: ${(error as Error).message}`;
+    connection.console.warn(message);
+  }
+}
+
+function shouldIndexIncludePath(
+  includePath: string,
+  workspaceRoot: string | null,
+  basiliskRoot: string | null
+): boolean {
+  if (!includePath) {
+    return false;
+  }
+  if (path.basename(includePath) === 'src-local') {
+    return true;
+  }
+  if (workspaceRoot && isPathInside(includePath, workspaceRoot)) {
+    return true;
+  }
+  if (basiliskRoot && isPathInside(includePath, basiliskRoot)) {
+    return true;
+  }
+  return false;
+}
+
+function isPathInside(candidate: string, root: string): boolean {
+  const relative = path.relative(root, candidate);
+  if (relative === '') {
+    return true;
+  }
+  return !relative.startsWith('..') && !path.isAbsolute(relative);
+}
+
 async function checkQccAndLog(settings: BasiliskSettings): Promise<boolean> {
-  const qccAvailable = await checkQccAvailable(settings.qccPath);
+  const resolvedQccPath = resolveQccPath(settings);
+  const qccAvailable = resolvedQccPath ? await checkQccAvailable(resolvedQccPath) : false;
   if (!settings.enableDiagnostics) {
     return qccAvailable;
   }
@@ -478,7 +548,8 @@ async function checkQccAndLog(settings: BasiliskSettings): Promise<boolean> {
       'Diagnostics will be limited. Set basilisk.qccPath in settings.'
     );
   } else {
-    connection.console.log('Basilisk LSP server initialized with qcc support');
+    const label = resolvedQccPath || settings.qccPath;
+    connection.console.log(`Basilisk LSP server initialized with qcc support (${label})`);
   }
   return qccAvailable;
 }
@@ -644,7 +715,9 @@ async function collectLocalDiagnostics(
 
   const runQcc =
     settings.enableDiagnostics &&
-    ((trigger === 'change' && runOnType) || (trigger === 'save' && runOnSave));
+    ((trigger === 'change' && runOnType) ||
+      (trigger === 'save' && runOnSave) ||
+      (trigger === 'open' && runOnSave));
 
   if (runQcc) {
     try {
@@ -858,7 +931,7 @@ function buildBasiliskHover(document: TextDocument, params: HoverParams): Hover 
   }
 
   const { word } = symbolInfo;
-  const doc = getHoverDocumentation(word);
+  const doc = getHoverDocumentation(word) ?? getBasiliskDoc(word)?.markdown;
   if (doc) {
     return {
       contents: {
@@ -880,10 +953,20 @@ function buildBasiliskHover(document: TextDocument, params: HoverParams): Hover 
 
   const symbol = symbolIndex.findDefinition(word);
   if (symbol) {
+    const sections: string[] = [];
+    if (symbol.documentation) {
+      sections.push(symbol.documentation.trim());
+    }
+    if (symbol.detail) {
+      sections.push(`\`\`\`c\n${symbol.detail}\n\`\`\``);
+    }
+    if (sections.length === 0) {
+      sections.push(`**${symbol.name}**`);
+    }
     return {
       contents: {
         kind: 'markdown',
-        value: `**${symbol.name}**\n\n${symbol.detail || ''}`
+        value: sections.join('\n\n')
       }
     };
   }
@@ -973,7 +1056,7 @@ connection.onCompletionResolve(async (item: CompletionItem): Promise<CompletionI
     }
   }
 
-  const doc = getHoverDocumentation(resolved.label);
+  const doc = getHoverDocumentation(resolved.label) ?? getBasiliskDoc(resolved.label)?.markdown;
   if (doc && !resolved.documentation) {
     resolved.documentation = {
       kind: 'markdown',

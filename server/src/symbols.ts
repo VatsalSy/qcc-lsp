@@ -23,6 +23,7 @@ export interface BasiliskSymbol {
   kind: SymbolKind;
   location: Location;
   detail?: string;
+  documentation?: string;
   children?: BasiliskSymbol[];
   containerName?: string;
 }
@@ -198,13 +199,15 @@ function extractSymbols(document: TextDocument): DocumentSymbol[] {
     // Extract events
     const eventMatch = /^\s*event\s+(\w+)\s*\(([^)]*)\)\s*\{?/.exec(line);
     if (eventMatch) {
+      const documentation = extractDocComment(lines, lineNum);
       const symbol = createSymbol(
         eventMatch[1],
         SymbolKind.Event,
         `event (${eventMatch[2].trim()})`,
         lineNum,
         eventMatch.index,
-        line.length
+        line.length,
+        documentation
       );
       symbols.push(symbol);
       currentContainer = symbol;
@@ -220,13 +223,15 @@ function extractSymbols(document: TextDocument): DocumentSymbol[] {
 
       // Skip if it looks like a foreach or control statement
       if (!CONTROL_KEYWORDS.includes(funcName as typeof CONTROL_KEYWORDS[number])) {
+        const documentation = extractDocComment(lines, lineNum);
         const symbol = createSymbol(
           funcName,
           SymbolKind.Function,
           `${returnType} ${funcName}(${params.trim()})`,
           lineNum,
           0,
-          line.length
+          line.length,
+          documentation
         );
         symbols.push(symbol);
         currentContainer = symbol;
@@ -239,6 +244,7 @@ function extractSymbols(document: TextDocument): DocumentSymbol[] {
     if (fieldMatch) {
       const fieldType = fieldMatch[1];
       const declarations = fieldMatch[2];
+      const documentation = extractDocComment(lines, lineNum);
 
       // Parse multiple declarations: "scalar f[], g[], h[]"
       const fieldNames = declarations.split(',').map(d => d.trim());
@@ -253,7 +259,8 @@ function extractSymbols(document: TextDocument): DocumentSymbol[] {
             fieldType,
             lineNum,
             line.indexOf(name),
-            line.length
+            line.length,
+            documentation
           );
 
           if (currentContainer && currentContainer.children) {
@@ -276,13 +283,15 @@ function extractSymbols(document: TextDocument): DocumentSymbol[] {
 
       // Skip common false positives
       if (!isBuiltinOrKeyword(varName)) {
+        const documentation = extractDocComment(lines, lineNum);
         const symbol = createSymbol(
           varName,
           SymbolKind.Variable,
           varType,
           lineNum,
           line.indexOf(varName),
-          line.length
+          line.length,
+          documentation
         );
         symbols.push(symbol);
       }
@@ -292,6 +301,7 @@ function extractSymbols(document: TextDocument): DocumentSymbol[] {
     // Extract struct/typedef definitions
     const structMatch = /^\s*typedef\s+struct\s*(?:\w*)\s*\{/.exec(line);
     if (structMatch) {
+      const documentation = extractDocComment(lines, lineNum);
       // Look for the closing brace and name
       let closingLine = lineNum;
       let depth = 1;
@@ -310,7 +320,8 @@ function extractSymbols(document: TextDocument): DocumentSymbol[] {
               'typedef struct',
               lineNum,
               0,
-              line.length
+              line.length,
+              documentation
             );
             // Set range to include entire struct
             symbol.range = Range.create(
@@ -332,13 +343,15 @@ function extractSymbols(document: TextDocument): DocumentSymbol[] {
       const params = defineMatch[2];
 
       const detail = params ? `#define ${macroName}(${params})` : `#define ${macroName}`;
+      const documentation = extractDocComment(lines, lineNum);
       const symbol = createSymbol(
         macroName,
         params ? SymbolKind.Function : SymbolKind.Constant,
         detail,
         lineNum,
         line.indexOf(macroName),
-        line.length
+        line.length,
+        documentation
       );
       symbols.push(symbol);
       continue;
@@ -348,13 +361,15 @@ function extractSymbols(document: TextDocument): DocumentSymbol[] {
     const enumMatch = /^\s*(?:typedef\s+)?enum\s*(\w*)\s*\{/.exec(line);
     if (enumMatch) {
       const enumName = enumMatch[1] || 'anonymous';
+      const documentation = extractDocComment(lines, lineNum);
       const symbol = createSymbol(
         enumName,
         SymbolKind.Enum,
         'enum',
         lineNum,
         0,
-        line.length
+        line.length,
+        documentation
       );
       symbols.push(symbol);
       continue;
@@ -373,8 +388,9 @@ function createSymbol(
   detail: string,
   line: number,
   startCol: number,
-  length: number
-): DocumentSymbol {
+  length: number,
+  documentation?: string
+): DocumentSymbol & { documentation?: string } {
   const safeStart = Math.max(0, startCol);
   const selectionEnd = safeStart + name.length;
   const rangeEnd = Math.max(length, selectionEnd);
@@ -393,7 +409,8 @@ function createSymbol(
     detail,
     range,
     selectionRange,
-    children: []
+    children: [],
+    documentation
   };
 }
 
@@ -404,10 +421,12 @@ function flattenSymbols(symbols: DocumentSymbol[], uri: string, containerName?: 
   const result: BasiliskSymbol[] = [];
 
   for (const symbol of symbols) {
+    const documentation = (symbol as DocumentSymbol & { documentation?: string }).documentation;
     result.push({
       name: symbol.name,
       kind: symbol.kind,
       detail: symbol.detail,
+      documentation,
       containerName,
       location: {
         uri,
@@ -421,6 +440,52 @@ function flattenSymbols(symbols: DocumentSymbol[], uri: string, containerName?: 
   }
 
   return result;
+}
+
+function extractDocComment(lines: string[], lineNum: number): string | undefined {
+  let i = lineNum - 1;
+  while (i >= 0 && lines[i].trim() === '') {
+    i--;
+  }
+  if (i < 0) {
+    return undefined;
+  }
+
+  if (!lines[i].includes('*/')) {
+    return undefined;
+  }
+
+  let start = i;
+  while (start >= 0) {
+    const line = lines[start];
+    if (line.includes('/**') || line.includes('/*!')) {
+      break;
+    }
+    if (line.includes('/*')) {
+      return undefined;
+    }
+    start--;
+  }
+
+  if (start < 0) {
+    return undefined;
+  }
+
+  const raw = lines.slice(start, i + 1);
+  const cleaned = raw.map((line, index) => {
+    let value = line;
+    if (index === 0) {
+      value = value.replace(/^\s*\/\*+!?/, '');
+    }
+    if (index === raw.length - 1) {
+      value = value.replace(/\*\/\s*$/, '');
+    }
+    value = value.replace(/^\s*\*\s?/, '');
+    return value;
+  });
+
+  const doc = cleaned.join('\n').trim();
+  return doc.length > 0 ? doc : undefined;
 }
 
 /**

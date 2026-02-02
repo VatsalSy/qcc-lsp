@@ -17,6 +17,7 @@ import {
   Position
 } from 'vscode-languageserver';
 import { findSrcLocalDir } from './projectConfig';
+import { resolveExecutableOnPath } from './pathUtils';
 
 export interface QccSettings {
   includePaths: string[];
@@ -162,6 +163,44 @@ function toSeverity(severity: 'error' | 'warning' | 'note'): DiagnosticSeverity 
   }
 }
 
+
+function resolveQccCandidates(settings: DiagnosticsSettings): string[] {
+  const candidates: string[] = [];
+
+  if (settings.qccPath) {
+    candidates.push(settings.qccPath);
+  }
+
+  const basiliskRoots: string[] = [];
+  if (settings.basiliskPath) {
+    basiliskRoots.push(settings.basiliskPath);
+  }
+  const envBasilisk = process.env.BASILISK;
+  if (envBasilisk && envBasilisk !== settings.basiliskPath) {
+    basiliskRoots.push(envBasilisk);
+  }
+
+  for (const root of basiliskRoots) {
+    candidates.push(path.join(root, 'qcc'));
+    candidates.push(path.join(root, 'bin', 'qcc'));
+  }
+
+  candidates.push('/opt/homebrew/bin/qcc');
+  candidates.push('/usr/local/bin/qcc');
+
+  return candidates;
+}
+
+export function resolveQccPath(settings: DiagnosticsSettings): string | null {
+  for (const candidate of resolveQccCandidates(settings)) {
+    const resolved = resolveExecutableOnPath(candidate);
+    if (resolved) {
+      return resolved;
+    }
+  }
+  return null;
+}
+
 /**
  * Create a Diagnostic from parsed error
  */
@@ -195,6 +234,7 @@ export async function runDiagnostics(
   }
 
   const diagnostics: Diagnostic[] = [];
+  const resolvedQccPath = resolveQccPath(settings) || settings.qccPath;
   let tempFile: string | null = null;
   const originalPath = documentUri.startsWith('file://')
     ? documentUri.replace('file://', '')
@@ -254,7 +294,7 @@ export async function runDiagnostics(
     }
 
     // Run qcc
-    const result = await runCommand(settings.qccPath, args, {
+    const result = await runCommand(resolvedQccPath, args, {
       env,
       cwd: tempDir
     });
@@ -287,7 +327,7 @@ export async function runDiagnostics(
         range: Range.create(Position.create(0, 0), Position.create(0, 1)),
         severity: DiagnosticSeverity.Warning,
         source: 'basilisk-lsp',
-        message: `qcc compiler not found at '${settings.qccPath}'. Set basilisk.qccPath in settings.`
+        message: `qcc compiler not found at '${resolvedQccPath}'. Set basilisk.qccPath in settings.`
       });
     } else if (logger) {
       const message = err?.message ? err.message : String(error);
@@ -435,7 +475,11 @@ export function quickValidate(content: string): Diagnostic[] {
  */
 export async function checkQccAvailable(qccPath: string): Promise<boolean> {
   try {
-    const result = await runCommand(qccPath, ['--version'], { timeout: 5000 });
+    const resolved = resolveExecutableOnPath(qccPath) || (path.isAbsolute(qccPath) ? qccPath : null);
+    if (!resolved) {
+      return false;
+    }
+    const result = await runCommand(resolved, ['--version'], { timeout: 5000 });
     return result.code === 0 || result.stdout.includes('gcc') || result.stderr.includes('gcc');
   } catch {
     return false;
@@ -447,7 +491,11 @@ export async function checkQccAvailable(qccPath: string): Promise<boolean> {
  */
 export async function getQccVersion(qccPath: string): Promise<string | null> {
   try {
-    const result = await runCommand(qccPath, ['--version'], { timeout: 5000 });
+    const resolved = resolveExecutableOnPath(qccPath) || (path.isAbsolute(qccPath) ? qccPath : null);
+    if (!resolved) {
+      return null;
+    }
+    const result = await runCommand(resolved, ['--version'], { timeout: 5000 });
     const output = result.stdout || result.stderr;
     // First line typically contains version info
     const firstLine = output.split('\n')[0];
