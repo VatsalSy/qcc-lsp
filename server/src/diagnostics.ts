@@ -16,6 +16,7 @@ import {
   Range,
   Position
 } from 'vscode-languageserver';
+import { URI } from 'vscode-uri';
 import { findSrcLocalDir } from './projectConfig';
 import { resolveExecutableOnPath } from './pathUtils';
 
@@ -236,16 +237,14 @@ export async function runDiagnostics(
   const diagnostics: Diagnostic[] = [];
   const resolvedQccPath = resolveQccPath(settings) || settings.qccPath;
   let tempFile: string | null = null;
-  const originalPath = documentUri.startsWith('file://')
-    ? documentUri.replace('file://', '')
-    : documentUri;
+  const originalPath = resolveDocumentPath(documentUri);
   const originalDir = path.dirname(originalPath);
   const srcLocalDir = findSrcLocalDir(originalDir);
 
   try {
     // Create a temporary file with the content
     const tempRoot = os.tmpdir();
-    const fileName = path.basename(documentUri);
+    const fileName = path.basename(originalPath);
     tempFile = path.join(tempRoot, `basilisk_${Date.now()}_${fileName}`);
 
     // Ensure the temp file has .c extension for qcc
@@ -282,7 +281,7 @@ export async function runDiagnostics(
         continue;
       }
       seen.add(includeDir);
-      args.push('-I', includeDir);
+      args.push(`-I${includeDir}`);
     }
 
     args.push(tempBase);
@@ -305,11 +304,12 @@ export async function runDiagnostics(
 
     // Filter diagnostics to only include those for our file
     const baseFileName = path.basename(tempFile);
+    const originalBaseFileName = path.basename(originalPath);
     for (const parsed of parsedDiagnostics) {
       // Match if the file is our temp file or the original file
       const parsedBase = path.basename(parsed.file);
       if (parsedBase === baseFileName ||
-          parsedBase === path.basename(documentUri) ||
+          parsedBase === originalBaseFileName ||
           parsed.file.includes(baseFileName)) {
         const diagnostic = createDiagnostic(parsed);
         diagnostics.push(diagnostic);
@@ -345,6 +345,21 @@ export async function runDiagnostics(
   }
 
   return diagnostics;
+}
+
+function resolveDocumentPath(documentUri: string): string {
+  try {
+    const parsed = URI.parse(documentUri);
+    if (parsed.scheme === 'file') {
+      return parsed.fsPath;
+    }
+  } catch {
+    // Fall back for non-URI input.
+  }
+
+  return documentUri.startsWith('file://')
+    ? documentUri.replace('file://', '')
+    : documentUri;
 }
 
 /**
