@@ -4,6 +4,9 @@
   "version": "0.1.0",
   "license": "MIT",
   "main": "./out/server.js",
+  "engines": {
+    "node": ">=18"
+  },
   "scripts": {
     "compile": "tsc -b",
     "watch": "tsc -b -w",
