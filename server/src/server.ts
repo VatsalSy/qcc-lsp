@@ -640,7 +640,7 @@ async function ensureClangd(settings: BasiliskSettings, qccAvailable: boolean): 
         return;
       }
 
-      let nextDiagnostics: Diagnostic[] = [];
+      let nextDiagnostics: Diagnostic[];
       if (settings.clangd.diagnosticsMode === 'none') {
         nextDiagnostics = [];
       } else if (settings.clangd.diagnosticsMode === 'filtered') {

@@ -303,7 +303,6 @@ function extractSymbols(document: TextDocument): DocumentSymbol[] {
     if (structMatch) {
       const documentation = extractDocComment(lines, lineNum);
       // Look for the closing brace and name
-      let closingLine = lineNum;
       let depth = 1;
       for (let j = lineNum + 1; j < lines.length && depth > 0; j++) {
         for (const char of lines[j]) {
@@ -311,7 +310,7 @@ function extractSymbols(document: TextDocument): DocumentSymbol[] {
           if (char === '}') depth--;
         }
         if (depth === 0) {
-          closingLine = j;
+          const closingLine = j;
           const closingMatch = /}\s*(\w+)\s*;/.exec(lines[j]);
           if (closingMatch) {
             const symbol = createSymbol(
