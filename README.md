@@ -74,7 +74,7 @@ Basilisk C extends C99 with domain-specific constructs for grid operations, fiel
 
 ### Prerequisites
 
-1. **Node.js** (v18 or later) - required for building from source or using the CLI
+1. **Node.js** (v20.19.0 or later) - required for building from source or using the CLI
 2. **Basilisk** installation with `qcc` compiler
    - Follow installation at http://basilisk.fr/src/INSTALL
 3. **clangd** (optional, but recommended for deep C/C++ semantics)
