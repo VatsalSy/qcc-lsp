@@ -304,7 +304,7 @@ export class ClangdClient {
   }
 
   private async handleServerRequest(request: JsonRpcRequest): Promise<void> {
-    let result: unknown = null;
+    let result: unknown;
 
     switch (request.method) {
       case 'workspace/configuration': {
