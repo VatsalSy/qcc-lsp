@@ -210,7 +210,7 @@
     "@typescript-eslint/eslint-plugin": "^8.56.0",
     "@typescript-eslint/parser": "^8.56.0",
     "concurrently": "^9.2.1",
-    "eslint": "^10.0.1",
+    "eslint": "^10.0.2",
     "typescript": "^5.9.3"
   }
 }
