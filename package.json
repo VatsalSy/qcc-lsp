@@ -207,10 +207,14 @@
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "@types/node": "^25.5.2",
-    "@typescript-eslint/eslint-plugin": "^8.59.1",
-    "@typescript-eslint/parser": "^8.59.1",
+    "@typescript-eslint/eslint-plugin": "^8.61.0",
+    "@typescript-eslint/parser": "^8.61.0",
     "concurrently": "^9.2.1",
-    "eslint": "^10.3.0",
+    "eslint": "^10.5.0",
     "typescript": "^6.0.2"
+  },
+  "dependencies": {
+    "vscode-languageclient": "^10.0.0",
+    "vscode-languageserver": "^10.0.0"
   }
 }
