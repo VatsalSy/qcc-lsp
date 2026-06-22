@@ -73,6 +73,7 @@ import {
   mergeFlags
 } from './clangdConfig';
 import { filterClangdDiagnostics } from './basiliskDetect';
+import { diagnosticMessageText } from './diagnosticMessage';
 import { loadProjectConfig, ProjectConfig, findSrcLocalDir } from './projectConfig';
 
 // Create connection and document manager
@@ -756,7 +757,7 @@ function dedupeDiagnostics(diagnostics: Diagnostic[]): Diagnostic[] {
       diagnostic.range.end.line,
       diagnostic.range.end.character,
       diagnostic.severity ?? '',
-      diagnostic.message,
+      diagnosticMessageText(diagnostic.message),
       diagnostic.source ?? ''
     ].join(':');
     if (seen.has(key)) {

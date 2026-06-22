@@ -12,6 +12,7 @@ import {
   CONSTANTS,
   LOOP_VARIABLES
 } from './basiliskLanguage';
+import { diagnosticMessageText } from './diagnosticMessage';
 
 const BASILISK_TOKENS = [
   ...CONTROL_KEYWORDS,
@@ -70,6 +71,7 @@ export function filterClangdDiagnostics(
       return true;
     }
 
-    return !NOISE_PATTERNS.some((pattern) => pattern.test(diagnostic.message));
+    const message = diagnosticMessageText(diagnostic.message);
+    return !NOISE_PATTERNS.some((pattern) => pattern.test(message));
   });
 }

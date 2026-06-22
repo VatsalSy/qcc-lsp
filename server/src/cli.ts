@@ -33,6 +33,7 @@ import {
 } from './clangdConfig';
 import { resolveExecutableOnPath } from './pathUtils';
 import { filterClangdDiagnostics } from './basiliskDetect';
+import { diagnosticMessageText } from './diagnosticMessage';
 
 type OutputFormat = 'text' | 'json';
 
@@ -508,7 +509,7 @@ function formatDiagnostic(
         ? 'info'
         : 'hint';
   const source = diagnostic.source ? `${diagnostic.source}: ` : '';
-  return `${filePath}:${line}:${col}: ${severity}: ${source}${diagnostic.message}`;
+  return `${filePath}:${line}:${col}: ${severity}: ${source}${diagnosticMessageText(diagnostic.message)}`;
 }
 
 function dedupeDiagnostics(diagnostics: Diagnostic[]): Diagnostic[] {
@@ -522,7 +523,7 @@ function dedupeDiagnostics(diagnostics: Diagnostic[]): Diagnostic[] {
       diagnostic.range.end.line,
       diagnostic.range.end.character,
       diagnostic.severity ?? '',
-      diagnostic.message,
+      diagnosticMessageText(diagnostic.message),
       diagnostic.source ?? ''
     ].join(':');
     if (seen.has(key)) {
