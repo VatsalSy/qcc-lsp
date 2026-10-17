@@ -211,7 +211,7 @@
     "@typescript-eslint/parser": "^8.65.0",
     "concurrently": "^10.0.4",
     "eslint": "^10.8.0",
-    "typescript": "^6.0.3"
+    "typescript": "^7.0.2"
   },
   "dependencies": {
     "vscode-languageclient": "^10.1.0",
