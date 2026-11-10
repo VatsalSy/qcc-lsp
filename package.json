@@ -206,15 +206,15 @@
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
-    "@types/node": "^26.1.2",
-    "@typescript-eslint/eslint-plugin": "^8.65.0",
-    "@typescript-eslint/parser": "^8.65.0",
+    "@types/node": "^26.6.6",
+    "@typescript-eslint/eslint-plugin": "^8.72.1",
+    "@typescript-eslint/parser": "^8.72.1",
     "concurrently": "^10.0.4",
-    "eslint": "^10.8.0",
+    "eslint": "^10.14.0",
     "typescript": "^6.0.3"
   },
   "dependencies": {
-    "vscode-languageclient": "^10.1.0",
-    "vscode-languageserver": "^10.1.0"
+    "vscode-languageclient": "^10.1.2",
+    "vscode-languageserver": "^10.1.2"
   }
 }
