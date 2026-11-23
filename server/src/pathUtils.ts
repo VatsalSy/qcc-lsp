@@ -48,7 +48,7 @@ export function resolveExecutableOnPath(command: string): string | null {
 
   const pathEnv = process.env.PATH || '';
   // Never interpret a PATH entry relative to a repository or process CWD.
-  if (path.basename(expanded) !== expanded || /[\u0000-\u001f\u007f]/.test(expanded)) {
+  if (path.basename(expanded) !== expanded || /\p{Cc}/u.test(expanded)) {
     return null;
   }
   const pathDirs = pathEnv.split(path.delimiter).filter(dir => path.isAbsolute(dir));

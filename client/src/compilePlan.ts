@@ -2,7 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 export function resolveCompiler(setting: string): string | undefined {
-  if (!setting || /[\u0000-\u001f\u007f]/.test(setting)) {
+  if (!setting || /\p{Cc}/u.test(setting)) {
     return undefined;
   }
   if (!path.isAbsolute(setting) && path.basename(setting) !== setting) {
