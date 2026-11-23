@@ -6,6 +6,8 @@
  */
 
 import * as path from 'path';
+import { randomUUID } from 'crypto';
+import { compilerInvocation, resolveCompiler } from './compilePlan';
 import * as vscode from 'vscode';
 
 import {
@@ -16,47 +18,6 @@ import {
 } from 'vscode-languageclient/node';
 
 let client: LanguageClient;
-
-/**
- * Validates and sanitizes executable path to prevent command injection.
- *
- * Rejects paths containing shell metacharacters or directory traversal attempts.
- *
- * @param execPath - Path string to validate
- * @returns True if path is safe to use, false otherwise
- */
-function isValidExecutablePath(execPath: string): boolean {
-  // Reject paths with shell metacharacters and traversal attempts
-  const dangerousChars = /[;&|`$()<>]/;
-  if (dangerousChars.test(execPath)) {
-    return false;
-  }
-
-  // Reject directory traversal patterns
-  if (execPath.includes('..')) {
-    return false;
-  }
-
-  return true;
-}
-
-/**
- * Resolves executable path to absolute form if already absolute.
- *
- * Relative paths are returned unchanged and will be resolved via shell PATH.
- *
- * @param execPath - Path to resolve
- * @returns Absolute path if already absolute, otherwise original path
- */
-function resolveExecutablePath(execPath: string): string {
-  // If already absolute, return as-is
-  if (path.isAbsolute(execPath)) {
-    return execPath;
-  }
-  
-  // Otherwise return the original (will be resolved by shell PATH)
-  return execPath;
-}
 
 /**
  * Activates the Basilisk C Language Server extension.
@@ -141,6 +102,61 @@ export function deactivate(): Thenable<void> | undefined {
   return client.stop();
 }
 
+async function runProcessTask(label: string, executable: string, args: string[], cwd: string, folder?: vscode.WorkspaceFolder): Promise<number | undefined> {
+  const id = randomUUID();
+  const task = new vscode.Task(
+    { type: 'basilisk-process', id },
+    folder ?? vscode.TaskScope.Global,
+    label,
+    'Basilisk',
+    new vscode.ProcessExecution(executable, args, { cwd })
+  );
+  task.presentationOptions = { reveal: vscode.TaskRevealKind.Always, panel: vscode.TaskPanelKind.Dedicated };
+
+  return new Promise((resolve, reject) => {
+    const listener = vscode.tasks.onDidEndTaskProcess(event => {
+      if (event.execution.task.definition.id === id) {
+        listener.dispose();
+        resolve(event.exitCode);
+      }
+    });
+    void vscode.tasks.executeTask(task).then(undefined, error => {
+      listener.dispose();
+      reject(error);
+    });
+  });
+}
+
+async function compileActiveFile(run: boolean): Promise<void> {
+  if (!vscode.workspace.isTrusted) {
+    void vscode.window.showErrorMessage('Trust this workspace before compiling or running a Basilisk file.');
+    return;
+  }
+  const document = vscode.window.activeTextEditor?.document;
+  if (!document || document.uri.scheme !== 'file' || !['basilisk', 'c'].includes(document.languageId)) {
+    void vscode.window.showErrorMessage('Open a local Basilisk C file to compile.');
+    return;
+  }
+  try {
+    const setting = vscode.workspace.getConfiguration('basilisk').inspect<string>('qccPath');
+    const executable = resolveCompiler(setting?.globalValue ?? setting?.defaultValue ?? 'qcc');
+    if (!executable) {
+      throw new Error('Set basilisk.qccPath in User or remote settings to an absolute qcc executable or a command on PATH.');
+    }
+    const plan = compilerInvocation(executable, document.fileName);
+    if (!await document.save()) {
+      throw new Error('Save the active file before compiling.');
+    }
+    const folder = vscode.workspace.getWorkspaceFolder(document.uri);
+    const exitCode = await runProcessTask('Compile', plan.executable, plan.args, plan.cwd, folder);
+    if (run && exitCode === 0 && vscode.workspace.isTrusted) {
+      await runProcessTask('Run', plan.outputPath, [], plan.cwd, folder);
+    }
+  } catch (error) {
+    void vscode.window.showErrorMessage('Basilisk: ' + (error as Error).message);
+  }
+}
+
 /**
  * Registers VS Code commands for Basilisk C operations.
  *
@@ -149,89 +165,9 @@ export function deactivate(): Thenable<void> | undefined {
  * @param context - VS Code extension context for subscriptions
  */
 function registerCommands(context: vscode.ExtensionContext) {
-  // Compile current file
   context.subscriptions.push(
-    vscode.commands.registerCommand('basilisk.compile', async () => {
-      const editor = vscode.window.activeTextEditor;
-      if (!editor) {
-        vscode.window.showErrorMessage('No active file to compile');
-        return;
-      }
-
-      const document = editor.document;
-      if (document.languageId !== 'basilisk' && document.languageId !== 'c') {
-        vscode.window.showErrorMessage('Current file is not a Basilisk C file');
-        return;
-      }
-
-      // Save document first
-      await document.save();
-
-      // Get settings
-      const config = vscode.workspace.getConfiguration('basilisk');
-      const qccPath = config.get<string>('qccPath', 'qcc');
-
-      // Validate qccPath
-      if (!isValidExecutablePath(qccPath)) {
-        vscode.window.showErrorMessage(
-          `Invalid qcc path: "${qccPath}". Path contains shell metacharacters or directory traversal. ` +
-          'Please check your basilisk.qccPath setting.'
-        );
-        return;
-      }
-
-      const resolvedQccPath = resolveExecutablePath(qccPath);
-
-      // Get output name
-      const filePath = document.fileName;
-      const outputName = path.basename(filePath, path.extname(filePath));
-
-      // Build command
-      const terminal = vscode.window.createTerminal('Basilisk Compile');
-      terminal.show();
-      terminal.sendText(`${resolvedQccPath} -Wall -O2 "${filePath}" -o "${outputName}" -lm`);
-    })
-  );
-
-  // Compile and run
-  context.subscriptions.push(
-    vscode.commands.registerCommand('basilisk.compileAndRun', async () => {
-      const editor = vscode.window.activeTextEditor;
-      if (!editor) {
-        vscode.window.showErrorMessage('No active file to compile');
-        return;
-      }
-
-      const document = editor.document;
-      if (document.languageId !== 'basilisk' && document.languageId !== 'c') {
-        vscode.window.showErrorMessage('Current file is not a Basilisk C file');
-        return;
-      }
-
-      await document.save();
-
-      const config = vscode.workspace.getConfiguration('basilisk');
-      const qccPath = config.get<string>('qccPath', 'qcc');
-
-      // Validate qccPath
-      if (!isValidExecutablePath(qccPath)) {
-        vscode.window.showErrorMessage(
-          `Invalid qcc path: "${qccPath}". Path contains shell metacharacters or directory traversal. ` +
-          'Please check your basilisk.qccPath setting.'
-        );
-        return;
-      }
-
-      const resolvedQccPath = resolveExecutablePath(qccPath);
-
-      const filePath = document.fileName;
-      const dirPath = path.dirname(filePath);
-      const outputName = path.basename(filePath, path.extname(filePath));
-
-      const terminal = vscode.window.createTerminal('Basilisk Run');
-      terminal.show();
-      terminal.sendText(`cd "${dirPath}" && ${resolvedQccPath} -Wall -O2 "${filePath}" -o "${outputName}" -lm && ./${outputName}`);
-    })
+    vscode.commands.registerCommand('basilisk.compile', () => compileActiveFile(false)),
+    vscode.commands.registerCommand('basilisk.compileAndRun', () => compileActiveFile(true))
   );
 
   // Insert event block

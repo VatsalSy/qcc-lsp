@@ -251,13 +251,12 @@ If you keep headers elsewhere, add them via `basilisk.qcc.includePaths` (VS Code
 ### Optional project config: `.comphy-basilisk`
 
 If your project stores headers outside `$BASILISK/*` or `REPO_ROOT/src-local`, create a `.comphy-basilisk` file in your repo and list the extra include paths there.
-This file is optional; the server works without it. It is a JSON file with keys that mirror the VS Code settings.
+This file is optional; the server works without it. It is a JSON file for project include paths and clangd diagnostics preferences.
 
 Example:
 
 ```json
 {
-  "basiliskPath": "/Users/you/basilisk/src",
   "qcc": {
     "includePaths": [
       "src-local",
@@ -268,7 +267,7 @@ Example:
 }
 ```
 
-Relative paths in `.comphy-basilisk` are resolved from the directory containing the file.
+Relative paths in `.comphy-basilisk` are resolved from the directory containing the file. Project configuration cannot select executables, a Basilisk installation, or clangd arguments or flags. Set these in VS Code User or remote settings (or pass the explicit CLI flags). The VS Code extension does not activate in Restricted Mode. Compile and Compile and Run use process tasks without shell interpretation and place their output alongside the source.
 
 Template: see `.comphy-basilisk.example` in the repo root.
 

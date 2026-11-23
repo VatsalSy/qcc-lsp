@@ -235,7 +235,15 @@ export async function runDiagnostics(
   }
 
   const diagnostics: Diagnostic[] = [];
-  const resolvedQccPath = resolveQccPath(settings) || settings.qccPath;
+  const resolvedQccPath = resolveQccPath(settings);
+  if (!resolvedQccPath) {
+    return [{
+      range: Range.create(Position.create(0, 0), Position.create(0, 1)),
+      severity: DiagnosticSeverity.Warning,
+      source: 'basilisk-lsp',
+      message: 'qcc not found. Set basilisk.qccPath in User or remote settings.'
+    }];
+  }
   let tempFile: string | null = null;
   const originalPath = resolveDocumentPath(documentUri);
   const originalDir = path.dirname(originalPath);

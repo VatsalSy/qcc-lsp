@@ -243,3 +243,20 @@ export function resolveProjectConfig(config: ProjectConfig, baseDir: string): Pr
 
   return resolved;
 }
+
+/**
+ * Repository configuration is data, not permission to start an executable.
+ * Only project-local diagnostics preferences and include paths reach runtime settings.
+ */
+export function projectConfigToSettings(config: ProjectConfig): Pick<ProjectConfig, 'qcc' | 'clangd'> {
+  return {
+    ...(config.qcc?.includePaths && { qcc: { includePaths: config.qcc.includePaths } }),
+    ...(config.clangd && {
+      clangd: {
+        ...(config.clangd.enabled !== undefined && { enabled: config.clangd.enabled }),
+        ...(config.clangd.mode !== undefined && { mode: config.clangd.mode }),
+        ...(config.clangd.diagnosticsMode !== undefined && { diagnosticsMode: config.clangd.diagnosticsMode })
+      }
+    })
+  };
+}

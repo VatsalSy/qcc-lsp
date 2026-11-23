@@ -74,7 +74,7 @@ import {
 } from './clangdConfig';
 import { filterClangdDiagnostics } from './basiliskDetect';
 import { diagnosticMessageText } from './diagnosticMessage';
-import { loadProjectConfig, ProjectConfig, findSrcLocalDir } from './projectConfig';
+import { loadProjectConfig, projectConfigToSettings, findSrcLocalDir } from './projectConfig';
 
 // Create connection and document manager
 const connection = createConnection(ProposedFeatures.all);
@@ -408,23 +408,6 @@ function mergeSettings(base: BasiliskSettings, partial: BasiliskSettingsInput): 
       ...(partial.clangd || {})
     }
   };
-}
-
-function projectConfigToSettings(config: ProjectConfig): BasiliskSettingsInput {
-  const partial: BasiliskSettingsInput = {};
-  if (config.qccPath) {
-    partial.qccPath = config.qccPath;
-  }
-  if (config.basiliskPath) {
-    partial.basiliskPath = config.basiliskPath;
-  }
-  if (config.qcc?.includePaths) {
-    partial.qcc = { includePaths: config.qcc.includePaths };
-  }
-  if (config.clangd) {
-    partial.clangd = { ...config.clangd };
-  }
-  return partial;
 }
 
 function applyProjectConfig(base: BasiliskSettings, startDir: string | null): BasiliskSettings {
