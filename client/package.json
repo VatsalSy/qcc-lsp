@@ -7,7 +7,7 @@
   "scripts": {
     "compile": "tsc -b",
     "watch": "tsc -b -w",
-    "test": "jest --passWithNoTests",
+    "test": "npm run compile && jest",
     "lint": "eslint ./src --ext .ts"
   },
   "dependencies": {

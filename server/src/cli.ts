@@ -23,7 +23,7 @@ import {
   runDiagnostics,
   quickValidate
 } from './diagnostics';
-import { loadProjectConfig, loadProjectConfigFromFile, ProjectConfig } from './projectConfig';
+import { loadProjectConfig, loadProjectConfigFromFile, projectConfigToSettings } from './projectConfig';
 import { ClangdClient } from './clangdClient';
 import {
   deriveBasiliskFallbackFlags,
@@ -379,23 +379,6 @@ function mergeSettings(base: BasiliskSettings, partial: BasiliskSettingsInput): 
       ...(partial.clangd || {})
     }
   };
-}
-
-function projectConfigToSettings(config: ProjectConfig): BasiliskSettingsInput {
-  const partial: BasiliskSettingsInput = {};
-  if (config.qccPath) {
-    partial.qccPath = config.qccPath;
-  }
-  if (config.basiliskPath) {
-    partial.basiliskPath = config.basiliskPath;
-  }
-  if (config.qcc?.includePaths) {
-    partial.qcc = { includePaths: config.qcc.includePaths };
-  }
-  if (config.clangd) {
-    partial.clangd = { ...config.clangd };
-  }
-  return partial;
 }
 
 function applyProjectConfig(

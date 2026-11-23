@@ -47,7 +47,11 @@ export function resolveExecutableOnPath(command: string): string | null {
   }
 
   const pathEnv = process.env.PATH || '';
-  const pathDirs = pathEnv.split(path.delimiter).filter(Boolean);
+  // Never interpret a PATH entry relative to a repository or process CWD.
+  if (path.basename(expanded) !== expanded || /[\u0000-\u001f\u007f]/.test(expanded)) {
+    return null;
+  }
+  const pathDirs = pathEnv.split(path.delimiter).filter(dir => path.isAbsolute(dir));
   const hasExt = path.extname(expanded).length > 0;
   const extensions = isWindows
     ? (process.env.PATHEXT || '.EXE;.CMD;.BAT;.COM').split(';')

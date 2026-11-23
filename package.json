@@ -27,6 +27,11 @@
     "vscode": "^1.109.0",
     "node": ">=20.19.0"
   },
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": false
+    }
+  },
   "activationEvents": [
     "onLanguage:basilisk"
   ],
@@ -61,6 +66,7 @@
       "title": "Basilisk C",
       "properties": {
         "basilisk.qccPath": {
+          "scope": "machine",
           "type": "string",
           "default": "qcc",
           "description": "Path to the qcc compiler"
@@ -74,6 +80,7 @@
           "description": "Additional include paths for qcc diagnostics (relative paths are resolved from the workspace)"
         },
         "basilisk.basiliskPath": {
+          "scope": "machine",
           "type": "string",
           "default": "",
           "description": "Path to the Basilisk installation directory (BASILISK environment variable)"
@@ -114,11 +121,13 @@
           "description": "clangd integration mode: proxy (fallback), augment (Basilisk-only features for use alongside external clangd), disabled (no clangd)"
         },
         "basilisk.clangd.path": {
+          "scope": "machine",
           "type": "string",
           "default": "clangd",
           "description": "Path to clangd executable"
         },
         "basilisk.clangd.args": {
+          "scope": "machine",
           "type": "array",
           "items": {
             "type": "string"
@@ -127,11 +136,13 @@
           "description": "Additional command-line arguments passed to clangd"
         },
         "basilisk.clangd.compileCommandsDir": {
+          "scope": "machine",
           "type": "string",
           "default": "",
           "description": "Directory containing compile_commands.json (defaults to BASILISK env or inferred qcc root when unset)"
         },
         "basilisk.clangd.fallbackFlags": {
+          "scope": "machine",
           "type": "array",
           "items": {
             "type": "string"

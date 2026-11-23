@@ -6,6 +6,7 @@
  */
 
 import { spawn, ChildProcessWithoutNullStreams } from 'child_process';
+import { resolveExecutableOnPath } from './pathUtils';
 import { Diagnostic, InitializeParams, InitializeResult } from 'vscode-languageserver/node';
 
 export interface ClangdRuntimeConfig {
@@ -84,9 +85,11 @@ export class ClangdClient {
     }
 
     try {
-      this.process = spawn(this.config.path, this.config.args, {
-        stdio: 'pipe'
-      });
+      const executable = resolveExecutableOnPath(this.config.path);
+      if (!executable) {
+        throw new Error('clangd not found. Set basilisk.clangd.path in User or remote settings.');
+      }
+      this.process = spawn(executable, this.config.args, { stdio: 'pipe' });
     } catch (error) {
       this.logger.error(`Failed to start clangd: ${(error as Error).message}`);
       return null;
